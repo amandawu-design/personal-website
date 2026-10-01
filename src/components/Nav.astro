@@ -75,13 +75,15 @@ import SocialIcons from './SocialIcons.astro';
     themeBtn?.setAttribute('aria-pressed', String(dark));
     themeBtn?.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
   };
-  syncTheme();
-  themeBtn?.addEventListener('click', () => {
-    const dark = root.classList.toggle('dark');
-    localStorage.setItem('theme', dark ? 'dark' : 'light');
+  const setTheme = (dark: boolean) => {
+    root.classList.toggle('dark', dark);
     syncTheme();
     window.dispatchEvent(new CustomEvent('themechange', { detail: { dark } }));
-  });
+  };
+  syncTheme();
+  themeBtn?.addEventListener('click', () => setTheme(!root.classList.contains('dark')));
+  // Follow the browser if its colour scheme changes while the page is open
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => setTheme(e.matches));
 
   /* ---------------- Mobile menu ---------------- */
   const header = document.querySelector<HTMLElement>('[data-site-header]');

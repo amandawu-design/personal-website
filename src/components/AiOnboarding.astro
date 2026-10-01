@@ -169,8 +169,8 @@ const R = {
 
 
 const chip = {
-  '--from-bg': 'linear-gradient(#171717,#171717) padding-box,linear-gradient(90deg,#57cf80,#59d3fd) border-box',
-  '--from-fg': '#f2f2f2',
+  '--from-bg': 'linear-gradient(var(--chip-bg),var(--chip-bg)) padding-box,linear-gradient(90deg,#57cf80,#59d3fd) border-box',
+  '--from-fg': 'var(--fg)',
   '--to-bg': 'linear-gradient(120deg,#04b741,#59d3fd) padding-box,linear-gradient(120deg,#04b741,#59d3fd) border-box',
   '--to-fg': '#0a0a0a',
 };
@@ -399,7 +399,7 @@ const generatedCss = css();
 
 <style>
   .ob {
-    --bg: #0a0a0a;
+    --frame: #eceeed;
     --fg: #f2f2f2;
     --muted: rgb(255 255 255 / 0.5);
     --faint: rgb(255 255 255 / 0.075);
@@ -408,6 +408,15 @@ const generatedCss = css();
     --green: #04b741;
     --sky: #59d3fd;
     --grad: linear-gradient(120deg, var(--green), #2fc6a0 55%, var(--sky)); /* the reference's card gradient */
+    --pill: #1c1c1a; /* Tracy's reaction and status pills */
+    --screen: #0d0d0d;
+    --screen-tint: rgb(4 183 65 / 0.24);
+    --bot: rgb(255 255 255 / 0.06);
+    --user-bg: #f2f2f2;
+    --user-fg: #111;
+    --chip-bg: #171717;
+    --mini-face: #f5f5f5;
+    --mini-eye: #0a0a0a;
 
     position: relative;
     width: 100%;
@@ -417,8 +426,25 @@ const generatedCss = css();
     background:
       radial-gradient(30% 55% at 42% 42%, rgb(4 183 65 / 0.14), transparent 70%),
       radial-gradient(30% 55% at 58% 58%, rgb(89 211 253 / 0.12), transparent 70%),
-      var(--bg);
+      var(--frame);
     container-type: inline-size;
+  }
+  /* Dark site: light interfaces on a dark frame (the default above is the light site's dark UI on a light frame) */
+  :global(html.dark) .ob {
+    --frame: #0a0a0a;
+    --fg: #141414;
+    --muted: rgb(0 0 0 / 0.5);
+    --faint: rgb(0 0 0 / 0.05);
+    --hair: rgb(0 0 0 / 0.08);
+    --pill: #ffffff;
+    --screen: #f7f7f6;
+    --screen-tint: rgb(4 183 65 / 0.14);
+    --bot: rgb(0 0 0 / 0.05);
+    --user-bg: #141414;
+    --user-fg: #f2f2f2;
+    --chip-bg: #ffffff;
+    --mini-face: #141414;
+    --mini-eye: #f5f5f5;
   }
   .ob-stage {
     position: absolute;
@@ -526,7 +552,7 @@ const generatedCss = css();
     width: 2.1em;
     height: 2.1em;
     border-radius: 50%;
-    background: #1c1c1a;
+    background: var(--pill);
     box-shadow: inset 0 0 0 1px var(--hair), 0 0.3em 0.8em rgb(0 0 0 / 0.5);
     font-size: 2.2em;
     line-height: 1;
@@ -566,7 +592,7 @@ const generatedCss = css();
     gap: 0.6em;
     padding: 0.55em 1em;
     border-radius: 2em;
-    background: #1c1c1a;
+    background: var(--pill);
     box-shadow: inset 0 0 0 1px var(--hair);
     font-size: 1.15em;
     color: var(--cyan);
@@ -601,8 +627,8 @@ const generatedCss = css();
     overflow: hidden;
     border-radius: 4.1em;
     background:
-      radial-gradient(130% 32% at 50% 0%, rgb(4 183 65 / 0.24), transparent 75%),
-      #0d0d0d; /* green-tinted top, as in the reference screens */
+      radial-gradient(130% 32% at 50% 0%, var(--screen-tint), transparent 75%),
+      var(--screen); /* green-tinted top, as in the reference screens */
   }
   .ob-statusbar {
     position: absolute;
@@ -676,13 +702,13 @@ const generatedCss = css();
     height: 2em;
     padding-top: 0.5em;
     border-radius: 50%;
-    background: #f5f5f5;
+    background: var(--mini-face);
   }
   .ob-mini-face i {
     width: 0.25em;
     height: 0.55em;
     border-radius: 1em;
-    background: #0a0a0a;
+    background: var(--mini-eye);
     transform: rotate(24deg);
   }
 
@@ -722,12 +748,12 @@ const generatedCss = css();
   }
   .ob-bot {
     align-self: flex-start;
-    background: rgb(255 255 255 / 0.06);
+    background: var(--bot);
   }
   .ob-user {
     align-self: flex-end;
-    background: #f2f2f2;
-    color: #111;
+    background: var(--user-bg);
+    color: var(--user-fg);
   }
   .ob-voice svg {
     display: inline-block;
@@ -748,7 +774,7 @@ const generatedCss = css();
     padding: 0.4em 0.85em;
     border: 1px solid transparent;
     border-radius: 1em;
-    background: linear-gradient(#171717, #171717) padding-box, linear-gradient(90deg, #57cf80, var(--sky)) border-box;
+    background: linear-gradient(var(--chip-bg), var(--chip-bg)) padding-box, linear-gradient(90deg, #57cf80, var(--sky)) border-box;
     font-size: 1.05em;
     color: var(--fg);
   }
