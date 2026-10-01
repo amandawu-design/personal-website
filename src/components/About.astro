@@ -7,16 +7,16 @@ import SocialIcons from './SocialIcons.astro';
   <div class="mx-auto max-w-[1200px] px-6 py-20 md:max-w-[1080px] md:px-10 md:py-[135px]">
     <h2 class="font-serif text-[clamp(2.4rem,4.6vw,3.8rem)] leading-none">About</h2>
 
-    <div class="mt-10 grid gap-14 md:mt-8 md:grid-cols-[1.25fr_1fr] md:gap-20">
+    <div class="mt-10 grid gap-14 md:mt-8 lg:grid-cols-2 lg:gap-16">
       <div class="max-w-[560px] space-y-5 text-[17px] leading-relaxed md:text-[19px]">
         {about.paragraphs.map((p) => <p>{p}</p>)}
         <SocialIcons size={26} class="gap-4 pt-6" />
       </div>
-      <dl class="grid grid-cols-2 gap-x-10 gap-y-10 self-start">
+      <dl class="grid grid-cols-1 gap-x-8 gap-y-10 self-start sm:grid-cols-2">
         {about.stats.map((s) => (
           <div>
             <dt class="font-serif text-[2.6rem] leading-none">{s.value}</dt>
-            <dd class="mt-2 max-w-[200px] text-[13px] font-medium uppercase leading-snug tracking-[0.08em]">{s.label}</dd>
+            <dd class="mt-2 max-w-[260px] text-[13px] font-medium uppercase leading-snug tracking-[0.08em]">{s.label}</dd>
           </div>
         ))}
       </dl>

@@ -27,6 +27,16 @@ const { study } = Astro.props;
     </ul>
   </div>
 
+  <div class="mt-8 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr]">
+    <p class="max-w-[560px] text-[17px] leading-relaxed sm:col-span-2 md:text-[19px] lg:col-span-1">{study.lede}</p>
+    {study.metrics.map((m) => (
+      <div>
+        <p class="font-serif text-[2.5rem] leading-none text-accent">{m.value}</p>
+        <p class="mt-1.5 max-w-[240px] text-[12px] uppercase leading-snug tracking-[0.08em] text-caption">{m.label}</p>
+      </div>
+    ))}
+  </div>
+
   {
     study.visual ? (
       // Animated visuals have their own controls, so they aren't wrapped in the case study link
@@ -57,13 +67,4 @@ const { study } = Astro.props;
     )
   }
 
-  <div class="mt-8 grid grid-cols-2 gap-8 md:grid-cols-[2.2fr_0.6fr_0.6fr] md:gap-6">
-    <p class="col-span-2 max-w-[560px] text-[17px] leading-relaxed md:col-span-1 md:text-[19px]">{study.lede}</p>
-    {study.metrics.map((m) => (
-      <div>
-        <p class="font-serif text-[2.5rem] leading-none text-accent">{m.value}</p>
-        <p class="mt-1.5 max-w-[150px] text-[12px] uppercase leading-snug tracking-[0.08em] text-caption">{m.label}</p>
-      </div>
-    ))}
-  </div>
 </article>
