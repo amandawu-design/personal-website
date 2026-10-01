@@ -1,0 +1,46 @@
+---
+import { posts, substack } from '../data/content';
+
+const formatDate = (iso: string) =>
+  new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+const themeLabel = { strategize: 'Strategize', design: 'Design', build: 'Build' } as const;
+---
+
+<section id="writing" class="bg-surface">
+  <div class="mx-auto max-w-[1200px] px-6 py-20 md:max-w-[1080px] md:px-10 md:py-[135px]">
+    <h2 class="font-serif text-[clamp(2.4rem,4.6vw,3.8rem)] leading-none">Writing</h2>
+
+    <ul class="mt-10 space-y-12 md:mt-8">
+      {posts.map((p) => (
+        <li class="grid gap-6 md:grid-cols-[1fr_2fr] md:gap-8">
+          <!-- Cover: a public-domain abstract artwork picked for the article's theme, with its credit -->
+          <figure class="m-0">
+            <a href={p.href} target="_blank" rel="noopener noreferrer" tabindex="-1" aria-hidden="true" class="group block aspect-[16/9.5] overflow-hidden rounded-md bg-placeholder">
+              <img src={p.image} alt="" loading="lazy" decoding="async" class="size-full object-cover transition-transform duration-700 group-hover:scale-[1.03]" />
+            </a>
+            <figcaption class="mt-2 text-[12px] leading-snug text-ink/70">
+              {p.art.artist}, <a href={p.art.source} target="_blank" rel="noopener noreferrer" class="italic underline-offset-2 hover:underline">{p.art.title}</a>, {p.art.year}
+            </figcaption>
+          </figure>
+          <!-- Title comes first in the markup so heading navigation reaches it before the date; `order` shows the date on top. -->
+          <div class="flex max-w-[480px] flex-col md:max-w-[600px]">
+            <h3 class="order-2 mt-2 font-serif text-[1.7rem] leading-snug">
+              <a href={p.href} target="_blank" rel="noopener noreferrer" class="hover:opacity-60">{p.title}</a>
+            </h3>
+            <p class="order-1 text-[13px] uppercase tracking-[0.08em] text-caption">
+              <time datetime={p.date}>{formatDate(p.date)}</time><span aria-hidden="true"> · </span><span class="sr-only">, Theme: </span>{themeLabel[p.theme]}
+            </p>
+            <p class="order-3 mt-3 line-clamp-3 text-[16px] leading-relaxed">{p.excerpt}</p>
+            <a href={p.href} target="_blank" rel="noopener noreferrer" class="order-4 mt-4 self-start text-[16px] underline underline-offset-2 hover:opacity-60">
+              Read more &gt;<span class="sr-only"> (opens Substack in a new tab)</span>
+            </a>
+          </div>
+        </li>
+      ))}
+    </ul>
+
+    <div class="mt-16 text-center">
+      <a href={`${substack}/archive`} target="_blank" rel="noopener noreferrer" class="text-[16px] underline underline-offset-2 hover:opacity-60">View all on Substack</a>
+    </div>
+  </div>
+</section>

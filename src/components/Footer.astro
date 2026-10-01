@@ -1,0 +1,11 @@
+---
+import { site } from '../data/content';
+import SocialIcons from './SocialIcons.astro';
+---
+
+<footer class="bg-paper">
+  <div class="mx-auto flex max-w-[1200px] items-center justify-center gap-10 px-6 py-7 text-[16px]">
+    <span>{site.name} © {site.year}</span>
+    <SocialIcons size={20} />
+  </div>
+</footer>

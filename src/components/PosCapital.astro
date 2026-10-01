@@ -1,0 +1,2599 @@
+---
+// Animated concept for the Build case study (payments & capital), in two
+// auto-cycling scenarios with the same dash controls as BankPortal:
+//   1. Pay at table: on the POS a server picks a table and sends the bill to a
+//      countertop reader (styled after the Stripe Reader S700), which lights up;
+//      the guest splits the bill (by % then by item), changes the tip, taps to
+//      pay and gets a texted receipt; the POS marks the table part-paid.
+//   2. Capital: sales are sliding, an AI insight flags a cash crunch and the
+//      owner simulates advance amounts and fee rates against projected growth.
+// Visual style after lightspeedhq.com/pos/payments/capital (warm black,
+// lavender glow, bold grotesk, red CTAs).
+//
+// Everything is in em (1em = 1/160 of the frame width) so it scales like an
+// image; timings are percentages of each scenario's --T.
+
+import { createTimeline, type Point } from '../scripts/timeline';
+
+const { n, kf, on, off, between, press, draw, toast, path, clicks, taps, css } = createTimeline();
+const money = (v: number, d = 2) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const round2 = (v: number) => Math.round(v * 100 + 1e-6) / 100; // cents, with float slack (58.195 → 58.20)
+
+/* ================================================================== */
+/* Scenario 1: pay at table (26s)                                      */
+/* ================================================================== */
+
+const PAY_T = '26s';
+const TAX = 0.13;
+const items = [
+  { name: 'Margherita pizza', qty: 2, price: 38 },
+  { name: 'Burrata', qty: 1, price: 16 },
+  { name: 'Caesar salad', qty: 1, price: 14.5 },
+  { name: 'Spaghetti vongole', qty: 1, price: 26 },
+  { name: 'Aperol spritz', qty: 2, price: 26 },
+  { name: 'Tiramisu', qty: 1, price: 11 },
+];
+const subtotal = items.reduce((s, i) => s + i.price, 0);
+const tax = round2(subtotal * TAX);
+const total = round2(subtotal + tax);
+const withTax = (v: number) => round2(v * (1 + TAX));
+// Guest 1 picks these items (indexes) when splitting by item
+const picks = [2, 3, 5];
+const guestRunning = picks.map((_, k) => withTax(picks.slice(0, k + 1).reduce((s, i) => s + items[i].price, 0)));
+const guest1 = guestRunning.at(-1)!;
+const tips = [15, 18, 20].map((p) => ({ p, amount: round2(guest1 * (p / 100)) }));
+const tip18 = tips[1].amount;
+const tip20 = tips[2].amount;
+const paid = round2(guest1 + tip20);
+const remaining = round2(total - guest1);
+
+// Desktop cursor (desktop em): table 12, then "Pay at table"
+const payCursor: Point[] = [
+  [0, 56, 52],
+  [6, 37, 35.5],
+  [8.5, 37, 35.5],
+  [14, 91.3, 61.6],
+  [16.5, 91.3, 61.6],
+  [22, 98, 64],
+  [100, 98, 64],
+];
+// Terminal taps (terminal-screen em)
+const segY = 12.3;
+const rowY = (i: number) => 16.55 + i * 2.7;
+const P = {
+  cursor: path('pc-a-cursor', payCursor),
+  cursorVis: between(1, 23),
+  clicks: clicks('pc-a-clicks', [7.5, 16]),
+  empty: off(8.8),
+  selected: on(8.3),
+  bill: on(8.8),
+  pay: press(16),
+  // terminal
+  glow: on(18),
+  idle: off(18),
+  split: between(18, 46),
+  segEven: between(18, 26),
+  segPct: between(26, 34),
+  segItems: on(34),
+  even: between(18, 26),
+  pct: between(26, 34),
+  byItem: on(34),
+  checks: [on(37), on(39), on(41)],
+  g1: [off(37), between(37, 39), between(39, 41), on(41)],
+  cont: press(45.5),
+  tip: between(46, 56),
+  tip18: off(51),
+  tip20: on(51),
+  tot18: off(51),
+  tot20: on(51),
+  payBtn: press(55.5),
+  tap: between(56, 66),
+  // the card slides in, taps the screen, slides away (terminal-body em)
+  // a real card is about as wide as the reader: 28 × 17.7em on a 30em-wide body
+  card: path('pc-a-card', [
+    [0, 48, 30],
+    [59, 48, 30],
+    [62.5, 3, 17.5],
+    [64, 1, 15.75], // centred on the contactless icon
+    [66, 3, 17.5],
+    [69, 48, 30],
+    [100, 48, 30],
+  ]),
+  approved: on(66),
+  receiptOpts: off(70.5),
+  receiptSent: on(70.5),
+  taps: taps('pc-a-taps', [
+    [26, 13.4, segY],
+    [34, 21.27, segY],
+    [37, 2.8, rowY(picks[0])],
+    [39, 2.8, rowY(picks[1])],
+    [41, 2.8, rowY(picks[2])],
+    [45.5, 13.4, 47],
+    [51, 7.3, 20.4],
+    [55.5, 13.4, 47],
+    [70, 7.3, 40.2], // "Text" receipt
+  ]),
+  // desktop after payment
+  tableBefore: off(70),
+  tableAfter: on(70),
+  paidRow: on(70),
+  toast: toast(70, 92),
+};
+
+const tables = [
+  { id: 10, x: 12, y: 10.5, state: 'busy', amount: 64.2, meta: '2 guests · 38m' },
+  { id: 11, x: 30, y: 10.5, state: 'free' },
+  { id: 14, x: 48, y: 10.5, state: 'ordering', meta: '3 guests · 5m' },
+  { id: 15, x: 12, y: 28.5, state: 'free' },
+  { id: 12, x: 30, y: 28.5, state: 'busy', amount: total, meta: '4 guests · 1h 12m', target: true },
+  { id: 16, x: 48, y: 28.5, state: 'busy', amount: 37.8, meta: '2 guests · 22m' },
+  { id: 20, x: 12, y: 46.5, state: 'busy', amount: 210.45, meta: '6 guests · 54m' },
+  { id: 21, x: 30, y: 46.5, state: 'free' },
+  { id: 22, x: 48, y: 46.5, state: 'reserved', meta: '8:00 PM' },
+];
+
+/* ================================================================== */
+/* Scenario 2: capital insights + simulator (26s)                      */
+/* ================================================================== */
+
+const CAP_T = '26s';
+// Weekly net sales (K) sliding over 12 weeks
+const weekly = [47.1, 46.3, 47.8, 45.2, 44.6, 43.1, 42.0, 40.8, 41.3, 39.2, 38.6, 38.2];
+const salesPts = weekly.map((v, i) => [n((i / (weekly.length - 1)) * 520 + 10), n(10 + ((49 - v) / (49 - 36)) * 160)] as const);
+const salesPath = 'M' + salesPts.map(([x, y]) => `${x} ${y}`).join(' L');
+const salesArea = `${salesPath} L${salesPts.at(-1)![0]} 172 L${salesPts[0][0]} 172 Z`;
+const drop = Math.round(((weekly.at(-1)! - weekly[0]) / weekly[0]) * 100);
+// same weeks last quarter, for the dashed comparison line
+const prevWeekly = [45.8, 46.9, 46.2, 47.4, 46.8, 47.9, 47.2, 48.1, 47.5, 48.4, 47.9, 48.6];
+const prevPath = 'M' + prevWeekly.map((v, i) => `${n((i / (prevWeekly.length - 1)) * 520 + 10)} ${n(10 + ((49 - v) / (49 - 36)) * 160)}`).join(' L');
+const PATIO_WEEK = 5; // the patio closed here (the AI insight refers to it)
+const spark = (vals: number[]) => {
+  const lo = Math.min(...vals);
+  const hi = Math.max(...vals);
+  return 'M' + vals.map((v, i) => `${n((i / (vals.length - 1)) * 96 + 2)} ${n(4 + ((hi - v) / (hi - lo || 1)) * 24)}`).join(' L');
+};
+const metrics = [
+  { label: 'Net sales', value: `$${weekly.at(-1)}K`, delta: `${Math.abs(drop)}%`, line: spark(weekly), active: true },
+  { label: 'Orders', value: '1,284', delta: '12%', line: spark([1460, 1442, 1471, 1420, 1402, 1390, 1356, 1330, 1342, 1301, 1296, 1284]) },
+  { label: 'Average order', value: '$29.75', delta: '8%', line: spark([32.3, 32.1, 32.5, 31.8, 31.6, 31.0, 30.9, 30.6, 30.8, 30.1, 29.9, 29.75]) },
+  { label: 'Returning guests', value: '31%', delta: '4 pts', line: spark([35, 35, 34.5, 34, 34, 33.2, 33, 32.4, 32.6, 31.8, 31.4, 31]) },
+];
+const nav = [
+  { label: 'Home', d: 'M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z' },
+  { label: 'Orders', d: 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6', badge: '12' },
+  { label: 'Menu items', d: 'M4 7l8-4 8 4-8 4zM4 7v10l8 4 8-4V7' },
+  { label: 'Guests', d: 'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20a6 6 0 0 1 12 0M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 6' },
+  { label: 'Analytics', d: 'M4 20V10M10 20V4M16 20v-7M22 20H2' },
+  { label: 'Payments', d: 'M3 6h18v12H3zM3 10h18' },
+  { label: 'Capital', d: 'M12 3v18M16 7H10a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6H7', badge: 'New' },
+];
+
+// Cash balance outlook (K) dipping below zero
+const cash = [18.4, 16.9, 14.2, 12.8, 10.1, 7.6, 5.9, 3.2, 1.1, -1.8, -3.9, -5.2];
+const cashY = (v: number) => n(10 + ((20 - v) / 28) * 135);
+const cashPts = cash.map((v, i) => [n((i / (cash.length - 1)) * 540 + 10), cashY(v)] as const);
+const cashPath = 'M' + cashPts.map(([x, y]) => `${x} ${y}`).join(' L');
+
+// Simulator model: $5K–$60K slider, remit 12% of ~$40K monthly sales
+const MIN = 5000;
+const MAX = 60000;
+const REMIT = 0.12 * 40000;
+const lift = (a: number) => a * 2.6 * (1 - a / 160000); // 12-month revenue lift, diminishing
+const states = [
+  { key: 'a', amount: 10000, rate: 0.1 },
+  { key: 'b', amount: 25000, rate: 0.1 },
+  { key: 'c', amount: 50000, rate: 0.1 },
+  { key: 'd', amount: 50000, rate: 0.12 },
+  { key: 'e', amount: 50000, rate: 0.08 },
+  { key: 'f', amount: 25000, rate: 0.08 },
+].map((s) => {
+  const repay = s.amount * (1 + s.rate);
+  const L = lift(s.amount);
+  // monthly revenue: baseline slides 1.5%/mo; the advance adds a ramping lift
+  const months = Array.from({ length: 13 }, (_, m) => m);
+  const ramp = months.map((m) => (m === 0 ? 0 : 1 - Math.exp(-m / 3)));
+  const rampSum = ramp.reduce((a, b) => a + b, 0);
+  const base = months.map((m) => 42000 * 0.985 ** m);
+  const withCap = months.map((m) => base[m] + (L * ramp[m]) / rampSum);
+  return { ...s, repay, payback: repay / REMIT, lift: L, base, withCap };
+});
+const yRev = (v: number) => n(10 + ((52000 - v) / (52000 - 32000)) * 190);
+const topItems = [
+  { name: 'Spaghetti vongole', sold: 164, sales: 4264 },
+  { name: 'Margherita pizza', sold: 212, sales: 4028 },
+  { name: 'Aperol spritz', sold: 301, sales: 3913 },
+  { name: 'Tiramisu', sold: 188, sales: 2068 },
+  { name: 'Burrata', sold: 121, sales: 1936 },
+];
+const expenses = [
+  { name: 'Payroll', when: 'Nov 15', amount: 14200 },
+  { name: 'Holiday inventory', when: 'Nov 20', amount: 9800 },
+  { name: 'Utilities', when: 'Nov 28', amount: 2100 },
+  { name: 'Rent', when: 'Dec 1', amount: 6500 },
+];
+const xMonth = (m: number) => n(46 + (m / 12) * 780);
+const linePath = (vals: number[]) => 'M' + vals.map((v, m) => `${xMonth(m)} ${yRev(v)}`).join(' L');
+const basePath = linePath(states[0].base);
+const statePaths = states.map((s) => {
+  const fee = s.amount * s.rate;
+  const advShare = (s.amount / s.repay) * 100;
+  return {
+    ...s,
+    fee,
+    d: linePath(s.withCap),
+    area: `${linePath(s.withCap)} L${xMonth(12)} ${yRev(32000)} L${xMonth(0)} ${yRev(32000)} Z`,
+    // "Your offer" ring (pathLength 100) and payback timeline (Nov → Jun = 8 months)
+    advArc: n(advShare - 0.8),
+    feeArc: n(100 - advShare - 0.8),
+    feeOffset: n(-advShare),
+    paidPct: n(Math.min(100, (s.payback / 8) * 100)),
+    liftPerFeeDollar: n(s.lift / fee),
+  };
+});
+const months = ['Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+
+// Admin layout (after Shopify's new admin): dark sidebar 0–16.8em, white main panel
+// inset 0.8em (so panel em + 16.8 / + 0.8 = desktop em). The AI insight opens between
+// the dashboard rows; "Simulate funding" then opens the Capital page. Cursor targets
+// below are desktop em on that page.
+const PANEL = { x: 16.8, y: 0.8 };
+const BUILDER = { x: 3, y: 12.4, pad: 2.6 }; // offer builder card (panel em)
+const TRACK_X = PANEL.x + BUILDER.x + BUILDER.pad;
+const TRACK_W = 64.8;
+const thumbX = (a: number) => TRACK_X + ((a - MIN) / (MAX - MIN)) * TRACK_W;
+const final = states.at(-1)!;
+const TRACK_Y = PANEL.y + BUILDER.y + 14.7;
+const RATE_Y = PANEL.y + BUILDER.y + 23.4;
+const rateX = { 0.08: TRACK_X + 6, 0.1: TRACK_X + 19.6, 0.12: TRACK_X + 33.2 } as Record<number, number>; // 12em pills, 1.6em gaps
+const REQ = [PANEL.x + 119.4 - 8.5, PANEL.y + 5.8] as const; // "Request" button in the page header
+const SIMULATE = [126, 56.9] as const; // "Simulate funding" button centre on the dashboard
+const capCursor: Point[] = [
+  [0, 100, 62],
+  [14, SIMULATE[0], SIMULATE[1]],
+  [17, SIMULATE[0], SIMULATE[1]],
+  [22, thumbX(10000), TRACK_Y],
+  [23, thumbX(10000), TRACK_Y],
+  [29, thumbX(25000), TRACK_Y],
+  [34, thumbX(50000), TRACK_Y],
+  [35, thumbX(50000), TRACK_Y],
+  [39, rateX[0.12], RATE_Y],
+  [41, rateX[0.12], RATE_Y],
+  [44, rateX[0.08], RATE_Y],
+  [46, rateX[0.08], RATE_Y],
+  [49, thumbX(50000), TRACK_Y],
+  [50, thumbX(50000), TRACK_Y],
+  [55, thumbX(25000), TRACK_Y],
+  [56, thumbX(25000), TRACK_Y],
+  [61, REQ[0], REQ[1]],
+  [63, REQ[0], REQ[1]],
+  [69, 128, 62],
+  [100, 128, 62],
+];
+const thumbOffset = (a: number) => `translateX(${n(thumbX(a) - thumbX(final.amount))}em)`;
+const fillScale = (a: number) => `scaleX(${n((a - MIN) / (final.amount - MIN))})`;
+const stateWindows: [number, number][] = [
+  [0, 26],
+  [26, 31.5],
+  [31.5, 40],
+  [40, 45],
+  [45, 52.5],
+  [52.5, 100],
+];
+const windowAnim = ([a, b]: [number, number]) => (a === 0 ? off(b) : b === 100 ? on(a) : between(a, b));
+const C = {
+  cursor: path('pc-b-cursor', capCursor),
+  cursorVis: between(1, 70),
+  clicks: clicks('pc-b-clicks', [16, 40, 45, 62]),
+  sales: draw(1, 8),
+  salesArea: on(6),
+  // the insight opens between the rows; the bottom row slides down to make room
+  insight: kf('pc-b-insight', '0%,8%{opacity:0;transform:translateY(-1em) scale(.985)}10.5%,100%{opacity:1;transform:none}'),
+  rowD: kf('pc-b-rowd', '0%,8%{transform:none}10.5%,100%{transform:translateY(13.8em)}'),
+  // "Simulate funding" opens the Capital page: the dashboard slides out, the page slides in
+  dashOut: kf('pc-b-dash', '0%,17.5%{opacity:1;transform:none}19.5%,100%{opacity:0;transform:translateX(-4em)}'),
+  pageIn: kf('pc-b-page', '0%,18%{opacity:0;transform:translateX(4em)}20.5%,100%{opacity:1;transform:none}'),
+  cards: [19, 19.8, 20.6].map((p, i) =>
+    kf(`pc-b-card${i}`, `0%,${p}%{opacity:0;transform:translateY(1.6em)}${n(p + 2.2)}%,100%{opacity:1;transform:none}`),
+  ),
+  ringIn: kf('pc-b-ring', '0%,20%{transform:rotate(-120deg) scale(.7);opacity:0}23%,100%{transform:none;opacity:1}'),
+  navAnalytics: off(18.5),
+  navCapital: on(18.5),
+  lines: [on(9.5), on(11), on(12.5)],
+  simulate: press(16),
+  windows: stateWindows.map(windowAnim),
+  rate10: off(40),
+  rate12: between(40, 45),
+  rate8: on(45),
+  request: press(62),
+  toast: toast(63, 94),
+};
+// thumb + fill follow the drags (offsets relative to the final $25K spot)
+const transforms = (name: string, frames: [number, string][]) => kf(name, frames.map(([p, t]) => `${p}%{transform:${t}}`).join(''));
+const thumbMove = transforms('pc-b-thumbmove', [
+  [0, thumbOffset(10000)],
+  [23, thumbOffset(10000)],
+  [29, thumbOffset(25000)],
+  [34, thumbOffset(50000)],
+  [50, thumbOffset(50000)],
+  [55, 'none'],
+  [100, 'none'],
+]);
+const fillMove = transforms('pc-b-fillmove', [
+  [0, fillScale(10000)],
+  [23, fillScale(10000)],
+  [29, fillScale(25000)],
+  [34, fillScale(50000)],
+  [50, fillScale(50000)],
+  [55, 'none'],
+  [100, 'none'],
+]);
+
+const scenes = [
+  {
+    key: 'pay',
+    tab: 'Pay at table',
+    T: PAY_T,
+    label: `Animated concept: on the POS, a server selects table 12 and sends the ${money(total)} bill to a handheld payment terminal. The terminal lights up, the guest splits the bill by percentage and then by item, changes the tip to 20% and taps a card. The terminal approves the payment and texts a receipt, and the POS shows ${money(remaining)} left on the table.`,
+  },
+  {
+    key: 'capital',
+    tab: 'Capital',
+    T: CAP_T,
+    label: `Animated concept: the POS shows net sales down ${Math.abs(drop)}% over 12 weeks. An AI insight warns that cash could run short and suggests an advance. The owner opens a capital simulator, compares advances from $10,000 to $50,000 and fee rates from 8% to 12% against projected revenue, and requests $25,000 at 8%.`,
+  },
+];
+
+const a = (name: string) => `--a:${name}`;
+const generatedCss = css();
+---
+
+<div class="pc-root" data-pos-capital data-scene="pay">
+  <div class="pc" role="img" aria-label={scenes[0].label} data-pc-frame>
+    <div class="pc-stage" aria-hidden="true">
+      <!-- ============================================================ -->
+      <!-- Scenario 1: pay at table                                      -->
+      <!-- ============================================================ -->
+      <div class="pc-scene pc-scene-pay" style={`--T:${PAY_T}`}>
+        <div class="pc-desktop pc-desktop-pay">
+          <div class="pc-side"><span class="pc-mark"></span><i></i><i class="is-on"></i><i></i><i></i></div>
+          <div class="pc-top">
+            <p class="pc-title">Dining room</p>
+            <span class="pc-chip is-on">Main</span><span class="pc-chip">Patio</span><span class="pc-chip">Bar</span>
+            <span class="pc-top-end"><span class="pc-muted">7:42 PM</span><span class="pc-avatar"><span>MJ</span></span></span>
+          </div>
+          <div class="pc-floor"></div>
+          {tables.map((t) => (
+            <div class:list={['pc-table', `is-${t.state}`]} style={`left:${t.x}em;top:${t.y}em`}>
+              <span class="pc-table-id">{t.id}</span>
+              {t.state === 'busy' && !t.target && <span class="pc-table-amt">{money(t.amount!)}</span>}
+              {t.target && (
+                <span class="pc-table-amt pc-swap">
+                  <span class="pc-a" style={a(P.tableBefore)}>{money(total)}</span>
+                  <span class="pc-a pc-hide pc-green" style={a(P.tableAfter)}>{money(remaining)} left</span>
+                </span>
+              )}
+              {t.state === 'free' && <span class="pc-table-meta">Free</span>}
+              {t.state === 'ordering' && <span class="pc-table-amt">Ordering</span>}
+              {t.state === 'reserved' && <span class="pc-table-amt">Reserved</span>}
+              {t.meta && <span class="pc-table-meta">{t.meta}</span>}
+              {t.target && <span class="pc-table-ring pc-a" style={a(P.selected)}></span>}
+              {t.target && <span class="pc-table-badge pc-a pc-hide" style={a(P.paidRow)}>1 of 2 paid</span>}
+            </div>
+          ))}
+
+          <div class="pc-panel">
+            <p class="pc-empty pc-a pc-hide" style={a(P.empty)}>Select a table to see its bill</p>
+            <div class="pc-bill pc-a" style={a(P.bill)}>
+              <p class="pc-bill-title">Table 12</p>
+              <p class="pc-muted pc-small">4 guests · Server: Maya · 1h 12m</p>
+              <div class="pc-lines">
+                {items.map((i) => (
+                  <div class="pc-line">
+                    <span><b>{i.qty}×</b> {i.name}</span>
+                    <span>{money(i.price)}</span>
+                  </div>
+                ))}
+              </div>
+              <div class="pc-line pc-muted"><span>Subtotal</span><span>{money(subtotal)}</span></div>
+              <div class="pc-line pc-muted"><span>Tax (13%)</span><span>{money(tax)}</span></div>
+              <div class="pc-line pc-total"><span>Total</span><span>{money(total)}</span></div>
+              <div class="pc-paid pc-a pc-hide" style={a(P.paidRow)}>
+                <div class="pc-line pc-green"><span>✓ Guest 1 · Visa •• 4821</span><span>{money(paid)}</span></div>
+                <div class="pc-line pc-total"><span>Remaining</span><span>{money(remaining)}</span></div>
+              </div>
+              <div class="pc-actions">
+                <span class="pc-btn pc-outline">Print bill</span>
+                <span class="pc-btn pc-red pc-a" style={a(P.pay)}>Pay at table</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="pc-toast pc-a pc-hide" style={a(P.toast)}>
+            <span class="pc-toast-icon"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+            <span class="pc-toast-text"><b>Payment approved · Table 12</b><span>Guest 1 paid {money(paid)} incl. {money(tip20)} tip</span></span>
+          </div>
+
+          <div class="pc-cursor pc-a" style={a(P.cursor)}>
+            <div class="pc-a pc-hide" style={a(P.cursorVis)}>
+              <span class="pc-ripple pc-a" style={a(P.clicks)}></span>
+              <svg class="pc-arrow" viewBox="0 0 20 24"><path d="M2 2l15 11.5-6.6.9 3.8 7.3-2.7 1.4-3.8-7.4L2 20.5z" /></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Handheld payment terminal -->
+        <div class="pc-terminal">
+          <span class="pc-term-glow pc-a" style={a(P.glow)}></span>
+          <span class="pc-term-base"></span>
+          <div class="pc-term-body">
+            <span class="pc-camera"></span>
+            <div class="pc-screen">
+              <!-- idle -->
+              <div class="pc-sc pc-idle pc-a pc-hide" style={a(P.idle)}>
+                <span class="pc-mark pc-mark-lg"></span>
+                <span>Ready</span>
+              </div>
+
+              <!-- split -->
+              <div class="pc-sc pc-a pc-hide" style={a(P.split)}>
+                <div class="pc-t-head">
+                  <p class="pc-t-muted">Table 12 · 4 guests</p>
+                  <p class="pc-t-amount">{money(total)}</p>
+                  <p class="pc-t-muted pc-t-label">Split the bill</p>
+                </div>
+                <div class="pc-seg">
+                  <span class="pc-seg-on pc-a" style={`${a(P.segEven)};left:0`}></span>
+                  <span class="pc-seg-on pc-a" style={`${a(P.segPct)};left:33.33%`}></span>
+                  <span class="pc-seg-on pc-a" style={`${a(P.segItems)};left:66.66%`}></span>
+                  <span>Even</span><span>By %</span><span>By item</span>
+                </div>
+                <div class="pc-sub pc-a" style={a(P.even)}>
+                  <div class="pc-trow"><span>Guest 1</span><b>{money(total / 2)}</b></div>
+                  <div class="pc-trow"><span>Guest 2</span><b>{money(total / 2)}</b></div>
+                </div>
+                <div class="pc-sub pc-a pc-hide" style={a(P.pct)}>
+                  <div class="pc-split-bar"><span style="width:60%"></span></div>
+                  <div class="pc-trow"><span>Guest 1 · <b>60%</b></span><b>{money(round2(total * 0.6))}</b></div>
+                  <div class="pc-trow"><span>Guest 2 · <b>40%</b></span><b>{money(round2(total * 0.4))}</b></div>
+                </div>
+                <div class="pc-sub pc-a pc-hide" style={a(P.byItem)}>
+                  {items.map((it, i) => (
+                    <div class="pc-item">
+                      <span class="pc-box">{picks.includes(i) && <span class="pc-tick pc-a pc-hide" style={a(P.checks[picks.indexOf(i)])}>✓</span>}</span>
+                      <span>{it.qty > 1 ? `${it.qty}× ` : ''}{it.name}</span>
+                      <span>{money(it.price)}</span>
+                    </div>
+                  ))}
+                  <div class="pc-trow pc-g1">
+                    <span>Guest 1 · incl. tax</span>
+                    <b class="pc-swap pc-swap-end">
+                      <span class="pc-a pc-hide" style={a(P.g1[0])}>$0.00</span>
+                      {guestRunning.map((v, k) => (
+                        <span class:list={['pc-a', k < guestRunning.length - 1 && 'pc-hide']} style={a(P.g1[k + 1])}>{money(v)}</span>
+                      ))}
+                    </b>
+                  </div>
+                </div>
+                <span class="pc-t-btn pc-a" style={a(P.cont)}>Continue</span>
+              </div>
+
+              <!-- tip -->
+              <div class="pc-sc pc-a pc-hide" style={a(P.tip)}>
+                <div class="pc-t-head">
+                  <p class="pc-t-muted">Guest 1</p>
+                  <p class="pc-t-amount">{money(guest1)}</p>
+                  <p class="pc-t-muted pc-t-label">Add a tip</p>
+                </div>
+                <div class="pc-tips">
+                  {tips.map((t) => (
+                    <span class="pc-tipbox">
+                      {t.p === 18 && <i class="pc-tip-on pc-a" style={a(P.tip18)}></i>}
+                      {t.p === 20 && <i class="pc-tip-on pc-a pc-hide" style={a(P.tip20)}></i>}
+                      <b>{t.p}%</b><span>{money(t.amount)}</span>
+                    </span>
+                  ))}
+                  <span class="pc-tipbox"><b>Custom</b><span>Enter amount</span></span>
+                </div>
+                <div class="pc-trow pc-tiptotal">
+                  <span>Total with tip</span>
+                  <b class="pc-swap pc-swap-end">
+                    <span class="pc-a" style={a(P.tot18)}>{money(guest1 + tip18)}</span>
+                    <span class="pc-a pc-hide" style={a(P.tot20)}>{money(paid)}</span>
+                  </b>
+                </div>
+                <span class="pc-t-btn pc-a" style={a(P.payBtn)}>Pay {money(paid)}</span>
+              </div>
+
+              <!-- tap card -->
+              <div class="pc-sc pc-center pc-a pc-hide" style={a(P.tap)}>
+                <span class="pc-nfc-ring"><svg class="pc-nfc" viewBox="0 0 48 48"><path d="M16 14c4 5 4 15 0 20M23 10c6 8 6 20 0 28M30 6c8 10 8 26 0 36" /></svg></span>
+                <span class="pc-t-muted2">Total</span>
+                <b class="pc-t-big">{money(paid)}</b>
+                <span class="pc-t-muted2">Tap, insert, or swipe to pay</span>
+              </div>
+
+              <!-- approved -->
+              <div class="pc-sc pc-center pc-a" style={a(P.approved)}>
+                <div class="pc-approved">
+                  <span class="pc-ok"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+                  <b class="pc-t-big">Approved</b>
+                  <span class="pc-t-muted2">{money(paid)} · Visa •• 4821</span>
+                </div>
+                <div class="pc-receipt-opts pc-a pc-hide" style={a(P.receiptOpts)}>
+                  <p class="pc-t-muted2">Would you like a receipt?</p>
+                  <div><span class="pc-t-opt">Text</span><span class="pc-t-opt">Email</span></div>
+                  <span class="pc-t-link">No receipt</span>
+                </div>
+                <p class="pc-receipt-sent pc-a" style={a(P.receiptSent)}>✓ Receipt texted to •••-0142</p>
+              </div>
+
+              <span class="pc-tap pc-a pc-hide" style={a(P.taps)}></span>
+            </div>
+            <span class="pc-card pc-a" style={a(P.card)}><i></i><span>•••• 4821</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- Scenario 2: capital                                           -->
+      <!-- ============================================================ -->
+      <div class="pc-scene pc-scene-capital" style={`--T:${CAP_T}`}>
+        <div class="pc-desktop pc-desktop-cap">
+          <!-- Dark sidebar -->
+          <div class="pc-admin-side">
+            <div class="pc-store"><span class="pc-mark"></span><b>Osteria Maya</b><span class="pc-chev">⌄</span></div>
+            <div class="pc-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>Search<span>⌘K</span></div>
+            <ul class="pc-nav">
+              {nav.map((item) => (
+                <li>
+                  {item.label === 'Analytics' && <span class="pc-nav-hl pc-a pc-hide" style={a(C.navAnalytics)}></span>}
+                  {item.label === 'Capital' && <span class="pc-nav-hl pc-a" style={a(C.navCapital)}></span>}
+                  <svg viewBox="0 0 24 24"><path d={item.d} /></svg>
+                  {item.label}
+                  {item.badge && <span class:list={['pc-nav-badge', item.badge === 'New' && 'is-new']}>{item.badge}</span>}
+                </li>
+              ))}
+            </ul>
+            <p class="pc-nav-label">Sales channels</p>
+            <ul class="pc-nav">
+              <li><svg viewBox="0 0 24 24"><path d="M4 5h16v10H4zM9 19h6M12 15v4" /></svg>Restaurant POS</li>
+              <li><svg viewBox="0 0 24 24"><path d="M4 7h16l-1.5 12h-13zM9 7a3 3 0 0 1 6 0" /></svg>Online ordering</li>
+            </ul>
+            <ul class="pc-nav pc-nav-bottom">
+              <li><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /></svg>Settings</li>
+            </ul>
+          </div>
+
+          <!-- White main panel -->
+          <div class="pc-main">
+            <!-- ===== Sales overview dashboard ===== -->
+            <div class="pc-dash pc-a" style={a(C.dashOut)}>
+              <p class="pc-crumb"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>Analytics</p>
+              <div class="pc-head">
+                <p class="pc-h1">Sales overview</p>
+                <span class="pc-pill-sm"><svg viewBox="0 0 24 24"><path d="M4 6h16v14H4zM4 10h16M9 3v4M15 3v4" /></svg>Last 12 weeks</span>
+                <span class="pc-pill-sm">Compared to last quarter</span>
+                <span class="pc-btn-sm">Export</span>
+              </div>
+
+              <!-- Metric tabs -->
+              <div class="pc-metrics">
+                {metrics.map((m) => (
+                  <div class:list={['pc-metric', m.active && 'is-on']}>
+                    <span class="pc-metric-label">{m.label}</span>
+                    <span class="pc-metric-row">
+                      <b>{m.value}</b>
+                      <span class="pc-delta">↘ {m.delta}</span>
+                    </span>
+                    <svg class="pc-spark" viewBox="0 0 100 32"><path d={m.line} /></svg>
+                  </div>
+                ))}
+              </div>
+
+          <!-- Net sales over time -->
+          <div class="pc-card-ui pc-sales">
+            <div class="pc-card-head">
+              <p class="pc-card-title">Net sales over time</p>
+              <span class="pc-legend-inline"><span><i class="pc-lg-ink"></i>This quarter</span><span><i class="pc-lg-dash"></i>Last quarter</span></span>
+            </div>
+            <svg class="pc-chart" viewBox="0 0 540 180">
+              <defs>
+                <linearGradient id="pc-sales-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#e81c1c" stop-opacity="0.14" />
+                  <stop offset="1" stop-color="#e81c1c" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+              {[20, 70, 120, 172].map((y) => <line class="pc-grid" x1="10" x2="530" y1={y} y2={y} />)}
+              <line class="pc-event" x1={salesPts[PATIO_WEEK][0]} x2={salesPts[PATIO_WEEK][0]} y1="14" y2="172" />
+              <text class="pc-axis" x={salesPts[PATIO_WEEK][0] + 6} y="24">Patio closed</text>
+              <path class="pc-prev-line" d={prevPath} />
+              <path class="pc-a" style={a(C.salesArea)} d={salesArea} fill="url(#pc-sales-fill)" />
+              <path class="pc-sales-line pc-a" style={a(C.sales)} d={salesPath} pathLength="1" />
+              <circle cx={salesPts.at(-1)![0]} cy={salesPts.at(-1)![1]} r="5" class="pc-dot-red" />
+            </svg>
+          </div>
+
+          <!-- Cash outlook -->
+          <div class="pc-card-ui pc-cash">
+            <p class="pc-card-title">Cash balance forecast</p>
+            <p class="pc-kpi">$18.4K <span class="pc-down">→ −$5.2K by Dec</span></p>
+            <svg class="pc-chart" viewBox="0 0 560 160">
+              <rect x="10" y={cashY(0)} width="540" height={158 - cashY(0)} class="pc-danger" />
+              <line class="pc-zero" x1="10" x2="550" y1={cashY(0)} y2={cashY(0)} />
+              <path class="pc-cash-line" d={cashPath} />
+              <text x="400" y={cashY(0) - 8} class="pc-axis">Nov 18</text>
+            </svg>
+          </div>
+
+          <!-- AI insight: opens between the chart row and the bottom row -->
+          <div class="pc-card-ui pc-insight pc-a" style={a(C.insight)}>
+            <div>
+              <div class="pc-ai-head">
+                <span class="pc-ai-avatar"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" /></svg></span>
+                <b>AI assistant</b>
+                <span class="pc-ai-tag">Insight</span>
+              </div>
+              <p class="pc-insight-title">Sales are down {Math.abs(drop)}% since the patio closed. At this pace, cash could run short by Nov 18.</p>
+            </div>
+            <ul class="pc-insight-list">
+              <li class="pc-a" style={a(C.lines[0])}>Payroll and holiday inventory need about $24K in the next 6 weeks</li>
+              <li class="pc-a" style={a(C.lines[1])}>An advance repaid from 12% of daily sales keeps a cushion</li>
+              <li class="pc-a" style={a(C.lines[2])}>Suggested: $25K, repaid in about 5–6 months</li>
+            </ul>
+            <span class="pc-btn pc-dark pc-a" style={a(C.simulate)}>Simulate funding</span>
+          </div>
+
+          <!-- Bottom row: slides down as the insight opens above it -->
+          <div class="pc-rowd pc-a" style={a(C.rowD)}>
+            <div class="pc-card-ui pc-top-items">
+              <div class="pc-card-head"><p class="pc-card-title">Top-selling items</p><span class="pc-muted">Last 12 weeks</span></div>
+              {topItems.map((t) => (
+                <div class="pc-ti">
+                  <span>{t.name}</span>
+                  <span class="pc-ti-bar"><i style={`width:${n((t.sales / topItems[0].sales) * 100)}%`}></i></span>
+                  <span class="pc-muted">{t.sold} sold</span>
+                  <b>{money(t.sales, 0)}</b>
+                </div>
+              ))}
+            </div>
+            <div class="pc-card-ui pc-expenses">
+              <div class="pc-card-head"><p class="pc-card-title">Upcoming expenses</p><span class="pc-pill-warn">Next 6 weeks</span></div>
+              {expenses.map((e) => (
+                <div class="pc-ex"><span>{e.name}</span><span class="pc-muted">{e.when}</span><b>{money(e.amount, 0)}</b></div>
+              ))}
+              <div class="pc-ex pc-ex-total"><span>Total</span><span></span><b>{money(expenses.reduce((t, e) => t + e.amount, 0), 0)}</b></div>
+            </div>
+          </div>
+            </div>
+
+            <!-- ===== Capital page (opened from "Simulate funding") ===== -->
+            <div class="pc-cap pc-a" style={a(C.pageIn)}>
+              <p class="pc-crumb"><svg viewBox="0 0 24 24"><path d="M12 3v18M16 7H10a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6H7" /></svg>Capital</p>
+              <div class="pc-head pc-cap-head">
+                <div class="pc-cap-titles">
+                  <p class="pc-h1">Fund the holiday rush</p>
+                  <p class="pc-cap-sub">An advance based on your sales. No credit check, repaid automatically from 12% of daily sales.</p>
+                </div>
+                <span class="pc-pill-green">Pre-approved up to $60,000</span>
+                <span class="pc-btn pc-red pc-request pc-a" style={a(C.request)}>Request {money(final.amount, 0)}</span>
+              </div>
+
+              <!-- Offer builder -->
+              <div class="pc-card-ui pc-builder pc-a" style={a(C.cards[0])}>
+                <p class="pc-muted pc-small pc-builder-label">How much do you need?</p>
+                <p class="pc-big-amount pc-swap">
+                  {statePaths.map((st, i) => (
+                    <span class:list={['pc-a', i < statePaths.length - 1 && 'pc-hide']} style={a(C.windows[i])}>{money(st.amount, 0)}</span>
+                  ))}
+                </p>
+                <span class="pc-ai-hint"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /></svg>AI pick for your cash gap: $25,000</span>
+                <div class="pc-track">
+                  <span class="pc-track-fill pc-a" style={`${a(fillMove)};width:${n(((final.amount - MIN) / (MAX - MIN)) * 100)}%`}></span>
+                  <span class="pc-ai-pick" style={`left:${n(((25000 - MIN) / (MAX - MIN)) * 100)}%`}></span>
+                  <span class="pc-thumb pc-a" style={`${a(thumbMove)};left:calc(${n(((final.amount - MIN) / (MAX - MIN)) * 100)}% - 1.3em)`}></span>
+                </div>
+                <div class="pc-track-scale"><span>$5K</span><span>$60K</span></div>
+                <p class="pc-rate-label"><span class="pc-muted pc-small">Advance fee</span></p>
+                <div class="pc-rates">
+                  {[0.08, 0.1, 0.12].map((r) => (
+                    <span class="pc-rate">
+                      {r === 0.1 && <i class="pc-rate-on pc-a pc-hide" style={a(C.rate10)}></i>}
+                      {r === 0.12 && <i class="pc-rate-on pc-a pc-hide" style={a(C.rate12)}></i>}
+                      {r === 0.08 && <i class="pc-rate-on pc-a" style={a(C.rate8)}></i>}
+                      <b>{Math.round(r * 100)}%</b>
+                    </span>
+                  ))}
+                  <span class="pc-muted pc-rate-note">One flat fee. No interest, no late fees.</span>
+                </div>
+              </div>
+
+              <!-- Your offer: ring + payback timeline -->
+              <div class="pc-card-ui pc-offer pc-a" style={a(C.cards[1])}>
+                <p class="pc-card-title">Your offer</p>
+                <div class="pc-ring-wrap">
+                  <svg class="pc-ring pc-a" style={a(C.ringIn)} viewBox="0 0 120 120">
+                    <circle class="pc-ring-track" cx="60" cy="60" r="48" />
+                    {statePaths.map((st, i) => (
+                      <g class:list={['pc-a', i < statePaths.length - 1 && 'pc-hide']} style={a(C.windows[i])}>
+                        <circle class="pc-ring-adv" cx="60" cy="60" r="48" pathLength="100" stroke-dasharray={`${st.advArc} 100`} />
+                        <circle class="pc-ring-fee" cx="60" cy="60" r="48" pathLength="100" stroke-dasharray={`${st.feeArc} 100`} stroke-dashoffset={st.feeOffset} />
+                      </g>
+                    ))}
+                  </svg>
+                  <div class="pc-ring-center">
+                    <span>Total to repay</span>
+                    <b class="pc-swap">{statePaths.map((st, i) => <span class:list={['pc-a', i < statePaths.length - 1 && 'pc-hide']} style={a(C.windows[i])}>{money(st.repay, 0)}</span>)}</b>
+                  </div>
+                </div>
+                <div class="pc-offer-legend">
+                  <div><i class="pc-dot-adv"></i><span>Advance</span><b class="pc-swap pc-swap-end">{statePaths.map((st, i) => <span class:list={['pc-a', i < statePaths.length - 1 && 'pc-hide']} style={a(C.windows[i])}>{money(st.amount, 0)}</span>)}</b></div>
+                  <div><i class="pc-dot-fee"></i><span>Fee</span><b class="pc-swap pc-swap-end">{statePaths.map((st, i) => <span class:list={['pc-a', i < statePaths.length - 1 && 'pc-hide']} style={a(C.windows[i])}>{money(st.fee, 0)} · {Math.round(st.rate * 100)}%</span>)}</b></div>
+                  <div><i class="pc-dot-day"></i><span>Daily remit</span><b>12% of sales</b></div>
+                </div>
+                <p class="pc-payback">Paid back in about <b class="pc-swap">{statePaths.map((st, i) => <span class:list={['pc-a', i < statePaths.length - 1 && 'pc-hide']} style={a(C.windows[i])}>{st.payback.toFixed(1)} months</span>)}</b></p>
+                <div class="pc-timeline">
+                  <div class="pc-tl-bar">
+                    {statePaths.map((st, i) => (
+                      <span class:list={['pc-tl-fill pc-a', i < statePaths.length - 1 && 'pc-hide']} style={`${a(C.windows[i])};width:${st.paidPct}%`}><i></i></span>
+                    ))}
+                  </div>
+                  <div class="pc-tl-months">{months.map((m) => <span>{m}</span>)}</div>
+                </div>
+              </div>
+
+              <!-- Projected revenue -->
+              <div class="pc-card-ui pc-projcard pc-a" style={a(C.cards[2])}>
+                <div class="pc-card-head">
+                  <p class="pc-card-title">Projected revenue, next 12 months</p>
+                  <span class="pc-legend-inline"><span><i class="pc-lg-green"></i>With advance</span><span><i class="pc-lg-dash"></i>Current trend</span></span>
+                </div>
+                <div class="pc-outs-v">
+                  <div>
+                    <span class="pc-muted">Revenue lift</span>
+                    <b class="pc-swap pc-green">{statePaths.map((st, i) => <span class:list={['pc-a', i < statePaths.length - 1 && 'pc-hide']} style={a(C.windows[i])}>+{money(Math.round(st.lift / 1000) * 1000, 0)}</span>)}</b>
+                  </div>
+                  <div>
+                    <span class="pc-muted">Lift per $1 of fee</span>
+                    <b class="pc-swap">{statePaths.map((st, i) => <span class:list={['pc-a', i < statePaths.length - 1 && 'pc-hide']} style={a(C.windows[i])}>${st.liftPerFeeDollar.toFixed(0)}</span>)}</b>
+                  </div>
+                </div>
+                <svg class="pc-proj" viewBox="0 0 840 220">
+                  <rect class="pc-holiday" x={xMonth(0.4)} y="6" width={n(xMonth(2) - xMonth(0.4))} height="200" rx="6" />
+                  <text class="pc-axis pc-holiday-label" x={xMonth(0.55)} y="22">Holiday rush</text>
+                  {[35000, 40000, 45000, 50000].map((v) => (
+                    <g>
+                      <line class="pc-grid" x1="46" x2="826" y1={yRev(v)} y2={yRev(v)} />
+                      <text class="pc-axis" x="0" y={yRev(v) + 4}>${v / 1000}K</text>
+                    </g>
+                  ))}
+                  <path class="pc-base-line" d={basePath} />
+                  {statePaths.map((st, i) => (
+                    <g class:list={['pc-a', i < statePaths.length - 1 && 'pc-hide']} style={a(C.windows[i])}>
+                      <path d={st.area} class="pc-proj-area" />
+                      <path d={st.d} class="pc-proj-line" />
+                      <line class="pc-paid-line" x1={xMonth(st.payback)} x2={xMonth(st.payback)} y1="30" y2="200" />
+                      <text class="pc-axis pc-paid-label" x={xMonth(st.payback) + 6} y="42">Paid off</text>
+                    </g>
+                  ))}
+                  <text class="pc-axis" x="770" y="216">12 months</text>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="pc-toast pc-a pc-hide" style={a(C.toast)}>
+            <span class="pc-toast-icon"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+            <span class="pc-toast-text"><b>Request sent · {money(final.amount, 0)} at {final.rate * 100}%</b><span>Funds typically arrive in 1–2 business days</span></span>
+          </div>
+
+          <div class="pc-cursor pc-a" style={a(C.cursor)}>
+            <div class="pc-a pc-hide" style={a(C.cursorVis)}>
+              <span class="pc-ripple pc-a" style={a(C.clicks)}></span>
+              <svg class="pc-arrow" viewBox="0 0 20 24"><path d="M2 2l15 11.5-6.6.9 3.8 7.3-2.7 1.4-3.8-7.4L2 20.5z" /></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Two dashes: pick a scenario; pressing the current one pauses / resumes -->
+  <div class="mt-3 flex justify-center" role="group" aria-label="Animation scenarios">
+    {
+      scenes.map((s, i) => (
+        <button
+          type="button"
+          class="pc-tab group grid h-6 w-8 place-items-center rounded-sm"
+          aria-current={i === 0 ? 'true' : 'false'}
+          aria-label={`Show ${s.tab.toLowerCase()} scenario`}
+          data-scene-btn={s.key}
+          data-name={s.tab.toLowerCase()}
+          data-label={s.label}
+          style={`--T:${s.T}`}
+        >
+          <span class="relative block h-[3px] w-6 overflow-hidden rounded-full bg-ink/15 transition-colors group-hover:bg-ink/30">
+            <span class="pc-progress" aria-hidden="true"></span>
+          </span>
+        </button>
+      ))
+    }
+  </div>
+</div>
+
+<style is:inline set:html={generatedCss}></style>
+
+<script>
+  import { initScenarios } from '../scripts/scenarios';
+
+  document.querySelectorAll<HTMLElement>('[data-pos-capital]').forEach((root) => {
+    initScenarios(root, root.querySelector<HTMLElement>('[data-pc-frame]')!, 'pc-progress');
+  });
+</script>
+
+<style>
+  .pc {
+    --ink: #191513;
+    --text: #2b2724;
+    --muted: #7a746f;
+    --line: #ebe8e4;
+    --bg: #f4f3f1;
+    --red: #e81c1c;
+    --green: #1f9d55;
+    --lav: #a594f9;
+    --lav-soft: #efebff;
+
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 8.64;
+    overflow: hidden;
+    border-radius: 0.375rem;
+    background:
+      radial-gradient(55% 75% at 88% 92%, rgb(165 148 249 / 0.55), transparent 70%),
+      radial-gradient(40% 50% at 10% 0%, rgb(165 148 249 / 0.12), transparent 70%),
+      #191513;
+    container-type: inline-size;
+  }
+  .pc-stage {
+    position: absolute;
+    inset: 0;
+    font-size: calc(100cqw / 160); /* 1em = 1/160 of the frame width */
+    font-family: var(--font-sans);
+    line-height: 1.3;
+    color: var(--text);
+  }
+  .pc p {
+    margin: 0;
+  }
+  .pc b {
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .pc i {
+    font-style: normal;
+  }
+  .pc ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Scenes and timeline */
+  .pc-scene {
+    position: absolute;
+    inset: 0;
+  }
+  .pc-root:not([data-scene='pay']) .pc-scene-pay,
+  .pc-root:not([data-scene='capital']) .pc-scene-capital {
+    display: none;
+  }
+  .pc-hide {
+    opacity: 0;
+  }
+  .pc-root[data-play] .pc-a {
+    animation-name: var(--a);
+    animation-duration: var(--T);
+    animation-timing-function: ease-in-out;
+    animation-fill-mode: both;
+  }
+  .pc-root[data-play] .pc-scene {
+    animation: pc-scene-in 0.5s ease both;
+  }
+  .pc-root[data-paused] *,
+  .pc-root[data-paused] *::before,
+  .pc-root[data-paused] *::after {
+    animation-play-state: paused !important;
+  }
+  .pc-progress {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--color-ink) 55%, transparent);
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  .pc-tab[aria-current='true'] .pc-progress {
+    transform: scaleX(1);
+  }
+  .pc-root[data-play] .pc-tab[aria-current='true'] .pc-progress {
+    animation: pc-progress var(--T) linear both;
+  }
+  .pc-swap {
+    display: inline-grid;
+  }
+  .pc-swap > span,
+  .pc-swap > g {
+    grid-area: 1 / 1;
+  }
+  .pc-swap-end {
+    justify-items: end;
+  }
+  .pc-muted {
+    color: var(--muted);
+  }
+  .pc-small {
+    font-size: 1.1em;
+  }
+  .pc-green {
+    color: var(--green) !important;
+  }
+
+  /* ---------------- Desktop shell ---------------- */
+  .pc-desktop {
+    position: absolute;
+    overflow: hidden;
+    border-radius: 1.6em;
+    background: var(--bg);
+    box-shadow: 0 2.4em 6em rgb(0 0 0 / 0.45), 0 0 0 1px rgb(255 255 255 / 0.06);
+  }
+  .pc-desktop-pay {
+    left: 10em;
+    top: 10.2em;
+    width: 104em;
+    height: 66em;
+  }
+  .pc-desktop-cap {
+    left: 10em;
+    top: 4.2em;
+    width: 140em;
+    height: 78em; /* taller than the other windows so the dashboard fills the frame */
+  }
+  .pc-side {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 8em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2.2em;
+    padding-top: 1.8em;
+    background: var(--ink);
+  }
+  .pc-side i {
+    width: 2.6em;
+    height: 2.6em;
+    border-radius: 0.8em;
+    background: rgb(255 255 255 / 0.1);
+  }
+  .pc-side i.is-on {
+    background: var(--red);
+  }
+  .pc-mark {
+    width: 2.8em;
+    height: 2.8em;
+    margin-bottom: 1em;
+    border-radius: 50% 50% 50% 0.4em;
+    background: linear-gradient(135deg, #ff5a4f, var(--red));
+    transform: rotate(-45deg);
+  }
+  .pc-top {
+    position: absolute;
+    left: 8em;
+    right: 0;
+    top: 0;
+    height: 6em;
+    display: flex;
+    align-items: center;
+    gap: 1em;
+    padding: 0 3em;
+    border-bottom: 1px solid var(--line);
+    background: #fff;
+  }
+  .pc-title {
+    margin-right: 1.2em !important;
+    font-size: 2em;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .pc-chip {
+    padding: 0.35em 0.9em;
+    border-radius: 2em;
+    border: 1px solid var(--line);
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .pc-chip.is-on {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: #fff;
+  }
+  .pc-top-end {
+    display: flex;
+    align-items: center;
+    gap: 1.4em;
+    margin-left: auto;
+    font-size: 1.1em;
+  }
+  .pc-avatar {
+    display: grid;
+    place-items: center;
+    width: 2.6em;
+    height: 2.6em;
+    border-radius: 50%;
+    background: var(--lav);
+    color: #fff;
+    font-weight: 700;
+  }
+  .pc-avatar span {
+    font-size: 0.85em;
+  }
+  .pc-btn {
+    display: grid;
+    place-items: center;
+    border-radius: 2em;
+    font-weight: 700;
+  }
+  .pc-red {
+    background: var(--red);
+    color: #fff;
+  }
+  .pc-dark {
+    background: var(--ink);
+    color: #fff;
+  }
+  .pc-outline {
+    border: 1px solid var(--ink);
+    color: var(--ink);
+  }
+
+  .pc-cursor {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 8;
+  }
+  .pc-arrow {
+    position: relative;
+    display: block;
+    width: 2.4em;
+    height: 2.9em;
+    margin: -0.2em 0 0 -0.2em;
+    fill: #fff;
+    stroke: var(--ink);
+    stroke-width: 1.4;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0.2em 0.3em rgb(0 0 0 / 0.25));
+  }
+  .pc-ripple {
+    position: absolute;
+    left: -2em;
+    top: -2em;
+    width: 4em;
+    height: 4em;
+    border-radius: 50%;
+    background: var(--red);
+    opacity: 0;
+  }
+  .pc-toast {
+    position: absolute;
+    right: 3em;
+    top: 7.5em;
+    z-index: 7;
+    display: flex;
+    align-items: center;
+    gap: 1.1em;
+    padding: 1.2em 1.8em 1.2em 1.3em;
+    border-radius: 1.4em;
+    background: #fff;
+    box-shadow: 0 1.2em 3em rgb(25 21 19 / 0.22);
+  }
+  .pc-scene-pay .pc-toast {
+    top: auto;
+    right: 3em;
+    bottom: 8em;
+  }
+  .pc-toast-icon {
+    display: grid;
+    place-items: center;
+    width: 2.8em;
+    height: 2.8em;
+    border-radius: 50%;
+    background: var(--green);
+  }
+  .pc-toast-icon svg,
+  .pc-ok svg {
+    width: 1.5em;
+    height: 1.5em;
+    fill: none;
+    stroke: #fff;
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .pc-toast-text {
+    display: flex;
+    flex-direction: column;
+  }
+  .pc-toast-text b {
+    font-size: 1.3em;
+  }
+  .pc-toast-text span {
+    font-size: 1.1em;
+    color: var(--muted);
+  }
+
+  /* ---------------- Scenario 1: floor plan + bill ---------------- */
+  .pc-floor {
+    position: absolute;
+    left: 8em;
+    top: 6em;
+    width: 56em;
+    bottom: 0;
+    background:
+      radial-gradient(circle, rgb(25 21 19 / 0.08) 0.12em, transparent 0.13em) 0 0 / 2.4em 2.4em,
+      var(--bg);
+  }
+  .pc-table {
+    position: absolute;
+    width: 14em;
+    height: 14em;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 0.3em;
+    border-radius: 1.6em;
+    background: #fff;
+    box-shadow: 0 0.2em 0.6em rgb(25 21 19 / 0.08);
+    text-align: center;
+  }
+  .pc-table::before {
+    content: '';
+    position: absolute;
+    left: 1.4em;
+    right: 1.4em;
+    top: 0;
+    height: 0.35em;
+    border-radius: 0 0 1em 1em;
+    background: var(--lav);
+  }
+  .pc-table.is-free {
+    background: transparent;
+    box-shadow: inset 0 0 0 0.15em rgb(25 21 19 / 0.15);
+  }
+  .pc-table.is-free::before {
+    display: none;
+  }
+  .pc-table.is-ordering::before {
+    background: #f5b340;
+  }
+  .pc-table.is-reserved {
+    background: var(--lav-soft);
+  }
+  .pc-table.is-reserved::before {
+    display: none;
+  }
+  .pc-table-id {
+    font-size: 2.2em;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .pc-table-amt {
+    font-size: 1.25em;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .pc-table-meta {
+    font-size: 1em;
+    color: var(--muted);
+  }
+  .pc-table-ring {
+    position: absolute;
+    inset: -0.45em;
+    border: 0.3em solid var(--red);
+    border-radius: 2em;
+  }
+  .pc-table-badge {
+    position: absolute;
+    right: -1.2em;
+    top: -1.2em;
+    padding: 0.3em 0.8em;
+    border-radius: 2em;
+    background: var(--green);
+    color: #fff;
+    font-size: 1em;
+    font-weight: 700;
+  }
+  .pc-panel {
+    position: absolute;
+    left: 64em;
+    right: 0;
+    top: 6em;
+    bottom: 0;
+    padding: 2.4em;
+    border-left: 1px solid var(--line);
+    background: #fff;
+  }
+  .pc-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 1.3em;
+    color: var(--muted);
+  }
+  .pc-bill {
+    position: absolute;
+    inset: 2.4em;
+  }
+  .pc-bill-title {
+    font-size: 2.2em;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .pc-lines {
+    margin: 1.4em 0 0.6em;
+  }
+  .pc-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 1em;
+    padding: 0.55em 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 1.15em;
+  }
+  .pc-line b {
+    margin-right: 0.2em;
+  }
+  .pc-total {
+    border-bottom: 0;
+    font-weight: 700;
+    color: var(--ink);
+    font-size: 1.35em;
+  }
+  .pc-paid {
+    margin-top: 0.4em;
+    padding-top: 0.4em;
+    border-top: 2px solid var(--ink);
+  }
+  .pc-paid .pc-line {
+    font-weight: 600;
+  }
+  .pc-actions {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4em;
+    display: grid;
+    grid-template-columns: 13.6em 1fr;
+    gap: 1em;
+  }
+  .pc-actions .pc-btn {
+    font-size: 1.2em;
+  }
+
+  /* ---------------- Terminal (after the Stripe Reader S700) ---------------- */
+  .pc-terminal {
+    position: absolute;
+    /* 1.075× so body + base = 66em, the shared device height; left/top are in this em */
+    font-size: 1.075em;
+    left: 109.77em; /* 118em */
+    top: 9.49em; /* 10.2em */
+    width: 30em;
+    height: 58em;
+    /* screen UI in the POS brand colours */
+    --t-ink: #191513;
+    --t-muted: #7a746f;
+    --t-accent: #e81c1c;
+    --t-screen: #faf9f7;
+  }
+  .pc-term-glow {
+    position: absolute;
+    inset: 2em 1em;
+    border-radius: 5em;
+    box-shadow: 0 0 6em 1.5em rgb(165 148 249 / 0.55);
+  }
+  /* second module under the body, like the S700's stepped base */
+  .pc-term-base {
+    position: absolute;
+    left: 0.8em;
+    right: -0.6em;
+    top: calc(100% - 3.6em);
+    height: 7em;
+    border-radius: 0 0 3em 3em;
+    background: linear-gradient(180deg, #e4e3f3, #f7f7fc 60%, #dedcf0);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.7), 0 2em 4em rgb(0 0 0 / 0.35);
+  }
+  .pc-term-body {
+    position: absolute;
+    inset: 0;
+    border-radius: 3.6em;
+    background: #fbfbfe;
+    /* right edge thickness in the lavender-grey of the reference */
+    box-shadow:
+      0.6em 0.3em 0 -0.1em #cfccea,
+      inset 0 0 0 1px rgb(255 255 255 / 0.9),
+      0 1.6em 4em rgb(0 0 0 / 0.35);
+  }
+  .pc-term-body::before {
+    content: '';
+    position: absolute;
+    inset: 0.8em;
+    border-radius: 2.9em;
+    background: #262833; /* the dark glass bezel */
+  }
+  .pc-camera {
+    position: absolute;
+    right: 5em;
+    top: 1.9em;
+    z-index: 1;
+    width: 0.7em;
+    height: 0.7em;
+    border-radius: 50%;
+    background: #4a4d5c;
+  }
+  .pc-screen {
+    position: absolute;
+    left: 1.6em;
+    top: 4.2em;
+    width: 26.8em;
+    height: 50.8em;
+    overflow: hidden;
+    border-radius: 2em;
+    background: var(--t-screen);
+    font-feature-settings: 'tnum';
+  }
+  .pc-sc {
+    position: absolute;
+    inset: 0;
+    background: var(--t-screen);
+    color: var(--t-ink);
+  }
+  .pc-terminal b {
+    color: var(--t-ink);
+  }
+  .pc-idle {
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.4em;
+    background: #0f0d0c;
+    color: rgb(255 255 255 / 0.4);
+    font-size: 1.2em;
+  }
+  .pc-mark-lg {
+    width: 3.6em;
+    height: 3.6em;
+    margin: 0;
+    opacity: 0.5;
+  }
+  .pc-t-head {
+    position: absolute;
+    left: 1.6em;
+    right: 1.6em;
+    top: 1.8em;
+  }
+  .pc-t-muted {
+    font-size: 1.1em;
+    color: var(--t-muted);
+  }
+  .pc-t-label {
+    margin-top: 0.5em !important;
+    font-weight: 600;
+    color: var(--t-ink);
+  }
+  .pc-t-amount {
+    font-size: 3.2em;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--t-ink);
+  }
+  .pc-seg {
+    position: absolute;
+    left: 1.6em;
+    right: 1.6em;
+    top: 10.6em;
+    height: 3.4em;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    place-items: center;
+    border-radius: 1.2em;
+    background: #efedea;
+  }
+  .pc-seg > span:not(.pc-seg-on) {
+    position: relative;
+    font-size: 1.05em;
+    font-weight: 600;
+    color: var(--t-ink);
+  }
+  .pc-seg-on {
+    position: absolute;
+    top: 0.3em;
+    bottom: 0.3em;
+    width: calc(33.33% - 0.6em);
+    margin-left: 0.3em;
+    border-radius: 0.9em;
+    background: #fff;
+    box-shadow: 0 0.1em 0.4em rgb(0 0 0 / 0.12);
+  }
+  .pc-sub {
+    position: absolute;
+    left: 1.6em;
+    right: 1.6em;
+    top: 15.2em;
+  }
+  .pc-trow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.7em 0;
+    border-bottom: 1px solid #ebe8e4;
+    font-size: 1.15em;
+  }
+  .pc-split-bar {
+    display: flex;
+    height: 0.8em;
+    margin: 0.6em 0 0.8em;
+    overflow: hidden;
+    border-radius: 1em;
+    background: #d9d1ff;
+  }
+  .pc-split-bar span {
+    background: var(--t-accent);
+  }
+  .pc-item {
+    display: grid;
+    grid-template-columns: 1.9em 1fr auto;
+    align-items: center;
+    gap: 0.8em;
+    height: 2.7em;
+  }
+  .pc-item > span:not(.pc-box) {
+    font-size: 1.02em;
+  }
+  .pc-box {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 1.9em;
+    height: 1.9em;
+    border: 0.15em solid #cfcac5;
+    border-radius: 0.5em;
+    background: #fff;
+  }
+  .pc-tick {
+    position: absolute;
+    inset: -0.15em;
+    display: grid;
+    place-items: center;
+    border-radius: 0.5em;
+    background: var(--t-accent);
+    color: #fff;
+    font-size: 1.1em;
+    font-weight: 700;
+  }
+  .pc-g1 {
+    margin-top: 0.4em;
+    border-top: 2px solid var(--t-ink);
+    border-bottom: 0;
+  }
+  .pc-t-btn {
+    position: absolute;
+    left: 1.333em; /* 1.6em at 1.2em text */
+    right: 1.333em;
+    top: 37.67em; /* 45.2em: the bottom of the screen */
+    height: 3em; /* 3.6em */
+    font-size: 1.2em;
+    display: grid;
+    place-items: center;
+    border-radius: 2em;
+    background: var(--t-accent);
+    color: #fff;
+    font-weight: 700;
+  }
+  .pc-tips {
+    position: absolute;
+    left: 1.6em;
+    right: 1.6em;
+    top: 10.6em;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8em;
+  }
+  .pc-tipbox {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 6em;
+    border: 1px solid #e5e1dc;
+    border-radius: 1.2em;
+    background: #fff;
+  }
+  .pc-tipbox > b {
+    position: relative;
+    font-size: 1.5em;
+  }
+  .pc-tipbox > span {
+    position: relative;
+    font-size: 1em;
+    color: var(--muted);
+  }
+  .pc-tip-on {
+    position: absolute;
+    inset: -1px;
+    border: 0.25em solid var(--t-accent);
+    border-radius: 1.2em;
+    background: #fff1f0;
+  }
+  .pc-tiptotal {
+    position: absolute;
+    left: 1.6em;
+    right: 1.6em;
+    top: 26em;
+    border-bottom: 0;
+  }
+  .pc-tiptotal b {
+    font-size: 1.3em;
+  }
+  .pc-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8em;
+    text-align: center;
+  }
+  .pc-nfc-ring {
+    display: grid;
+    place-items: center;
+    width: 8.4em;
+    height: 8.4em;
+    margin-bottom: 1.2em;
+    border-radius: 50%;
+    background: #efedea;
+  }
+  .pc-nfc {
+    width: 4.6em;
+    height: 4.6em;
+    fill: none;
+    stroke: var(--t-ink);
+    stroke-width: 2.6;
+    stroke-linecap: round;
+  }
+  .pc-root[data-play] .pc-nfc path {
+    animation: pc-nfc 1.2s ease-in-out infinite;
+  }
+  .pc-nfc path:nth-child(2) {
+    animation-delay: 0.15s !important;
+  }
+  .pc-nfc path:nth-child(3) {
+    animation-delay: 0.3s !important;
+  }
+  .pc-t-big {
+    font-size: 2.6em;
+    letter-spacing: -0.02em;
+  }
+  .pc-t-muted2 {
+    font-size: 1.15em;
+    color: var(--t-muted);
+  }
+  .pc-approved {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 10em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8em;
+  }
+  .pc-receipt-opts {
+    position: absolute;
+    left: 1.6em;
+    right: 1.6em;
+    top: 36em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1em;
+  }
+  .pc-receipt-opts > div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8em;
+    align-self: stretch;
+  }
+  .pc-t-opt {
+    display: grid;
+    place-items: center;
+    height: 3.4em;
+    border: 1px solid #d9d4ce;
+    border-radius: 2em;
+    background: #fff;
+    font-size: 1.05em;
+    font-weight: 600;
+  }
+  .pc-t-link {
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--t-accent);
+  }
+  .pc-receipt-sent {
+    position: absolute;
+    left: 1.6em;
+    right: 1.6em;
+    top: 39em;
+    padding: 1em;
+    border-radius: 0.9em;
+    background: #e9f7ef;
+    color: #1a7f4b;
+    font-size: 1.1em;
+    font-weight: 600;
+    text-align: center;
+  }
+  .pc-ok {
+    display: grid;
+    place-items: center;
+    width: 7em;
+    height: 7em;
+    margin-bottom: 0.6em;
+    border-radius: 50%;
+    background: #30b566;
+  }
+  .pc-ok svg {
+    width: 3.4em;
+    height: 3.4em;
+  }
+  .pc-tap {
+    position: absolute;
+    left: -2em;
+    top: -2em;
+    z-index: 5;
+    width: 4em;
+    height: 4em;
+    border-radius: 50%;
+    background: rgb(25 21 19 / 0.3);
+    box-shadow: 0 0 0 0.3em rgb(255 255 255 / 0.7);
+  }
+  .pc-card {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 6;
+    transform: translate(48em, 30em); /* static state: off to the right, outside the frame */
+    width: 28em;
+    height: 17.7em; /* ISO card ratio 85.6 × 54 */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 2.2em 2.4em;
+    border-radius: 1.6em;
+    background: linear-gradient(135deg, #8f7cf6, #5b45d6);
+    color: #fff;
+    box-shadow: 0 1.4em 3em rgb(0 0 0 / 0.45);
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  .pc-card i {
+    width: 4.4em;
+    height: 3.3em;
+    border-radius: 0.6em;
+    background: linear-gradient(135deg, #f3d488, #c9a24c);
+  }
+  .pc-card span {
+    font-size: 1.9em;
+    letter-spacing: 0.1em;
+  }
+
+  /* ---------------- Scenario 2: capital (layout after Shopify's new admin, in the POS brand colours) ---------------- */
+  .pc-desktop-cap {
+    background: var(--ink); /* the dark frame around the white main panel */
+  }
+  .pc-admin-side {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 16.8em;
+    display: flex;
+    flex-direction: column;
+    padding: 1.8em 1.2em 1.4em;
+    color: rgb(255 255 255 / 0.85);
+  }
+  .pc-store {
+    display: flex;
+    align-items: center;
+    gap: 0.7em;
+    padding: 0 0.4em;
+  }
+  .pc-store .pc-mark {
+    width: 1.8em;
+    height: 1.8em;
+    margin: 0;
+  }
+  .pc-store b {
+    color: #fff;
+    font-size: 1.2em;
+  }
+  .pc-chev {
+    margin-left: auto;
+    color: rgb(255 255 255 / 0.5);
+  }
+  .pc-search {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    height: 3em;
+    margin: 1.6em 0 1.2em;
+    padding: 0 0.9em;
+    border-radius: 0.9em;
+    background: rgb(255 255 255 / 0.1);
+    font-size: 1.05em;
+    color: rgb(255 255 255 / 0.55);
+  }
+  .pc-search span {
+    margin-left: auto;
+    font-size: 0.9em;
+  }
+  .pc-search svg,
+  .pc-nav svg,
+  .pc-crumb svg,
+  .pc-pill-sm svg {
+    flex: none;
+    width: 1.3em;
+    height: 1.3em;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .pc-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2em;
+  }
+  .pc-nav li {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+    height: 2.8em;
+    padding: 0 0.8em;
+    border-radius: 0.8em;
+    font-size: 1.1em;
+  }
+  .pc-nav li.is-on {
+    background: rgb(255 255 255 / 0.12);
+    color: #fff;
+    font-weight: 600;
+  }
+  .pc-nav li.is-on svg {
+    color: #ff6a5f;
+  }
+  .pc-nav li > :not(.pc-nav-hl) {
+    position: relative;
+  }
+  .pc-nav-hl {
+    position: absolute;
+    inset: 0;
+    border-radius: 0.8em;
+    background: rgb(255 255 255 / 0.14);
+  }
+  .pc-nav-badge {
+    margin-left: auto;
+    padding: 0.05em 0.55em;
+    border-radius: 1em;
+    background: rgb(255 255 255 / 0.14);
+    font-size: 0.85em;
+  }
+  .pc-nav-badge.is-new {
+    background: var(--lav);
+    color: var(--ink);
+    font-weight: 700;
+  }
+  .pc-nav-label {
+    margin: 1.6em 0 0.5em 1em !important;
+    font-size: 0.95em;
+    color: rgb(255 255 255 / 0.45);
+  }
+  .pc-nav-bottom {
+    margin-top: auto;
+  }
+  .pc-main {
+    position: absolute;
+    left: 16.8em;
+    right: 0.8em;
+    top: 0.8em;
+    bottom: 0.8em;
+    overflow: hidden;
+    border-radius: 1.4em;
+    background: #fff;
+  }
+  /* two stacked pages in main-panel em: the dashboard, then the Capital page */
+  .pc-dash,
+  .pc-cap {
+    position: absolute;
+    inset: 0;
+  }
+  .pc-dash {
+    opacity: 0; /* static state shows the Capital page */
+  }
+  .pc-crumb {
+    position: absolute;
+    left: 3em;
+    top: 1.8em;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    font-size: 1.05em;
+    color: var(--muted);
+  }
+  .pc-head {
+    position: absolute;
+    left: 3em;
+    right: 3em;
+    top: 4em;
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+  }
+  .pc-h1 {
+    margin-right: auto !important;
+    font-size: 2.4em;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .pc-pill-sm {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.45em 0.9em;
+    border: 1px solid var(--line);
+    border-radius: 0.8em;
+    font-size: 1.05em;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .pc-btn-sm {
+    padding: 0.5em 1.1em;
+    border-radius: 0.8em;
+    background: var(--ink);
+    color: #fff;
+    font-size: 1.05em;
+    font-weight: 600;
+  }
+  .pc-metrics {
+    position: absolute;
+    left: 3em;
+    right: 3em;
+    top: 9.2em; /* desktop y 10–20 */
+    height: 10em;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.4em;
+    padding: 0.4em;
+    border: 1px solid var(--line);
+    border-radius: 1.2em;
+  }
+  .pc-metric {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.4em;
+    padding: 0 1.4em;
+    border-radius: 0.9em;
+  }
+  .pc-metric.is-on {
+    background: #f6f5f3;
+  }
+  .pc-metric-label {
+    align-self: flex-start;
+    border-bottom: 1px dashed #cfcac5;
+    font-size: 1.05em;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .pc-metric-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6em;
+  }
+  .pc-metric-row b {
+    font-size: 2em;
+    letter-spacing: -0.02em;
+  }
+  .pc-delta {
+    font-size: 1em;
+    font-weight: 700;
+    color: var(--red);
+  }
+  .pc-spark {
+    position: absolute;
+    right: 1.4em;
+    bottom: 1.4em;
+    width: 7em;
+    height: 2.2em;
+    fill: none;
+    stroke: var(--red);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    opacity: 0.8;
+  }
+
+  .pc-card-ui {
+    position: absolute;
+    padding: 2.2em;
+    border: 1px solid var(--line);
+    border-radius: 1.2em;
+    background: #fff;
+  }
+  .pc-sales,
+  .pc-cash {
+    top: 21.2em;
+    height: 27em;
+  }
+  .pc-sales {
+    left: 3em;
+    width: 58em;
+  }
+  .pc-cash {
+    left: 63em;
+    width: 56.4em;
+  }
+  .pc-insight {
+    left: 3em;
+    top: 50.2em;
+    width: 116.4em;
+    height: 11.8em;
+    display: grid;
+    grid-template-columns: 1fr 36em 16em;
+    align-items: center;
+    gap: 2.4em;
+    border-color: #ddd4ff;
+    background: linear-gradient(135deg, #f6f3ff, #ebe5ff);
+  }
+  .pc-rowd {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50.2em;
+    height: 27em;
+    transform: translateY(13.8em); /* static state: pushed below the insight */
+  }
+  .pc-top-items,
+  .pc-expenses {
+    top: 0;
+    height: 27em;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2em;
+  }
+  .pc-top-items {
+    left: 3em;
+    width: 58em;
+  }
+  .pc-expenses {
+    left: 63em;
+    width: 56.4em;
+  }
+  .pc-card-head {
+    margin-bottom: 0.8em;
+  }
+  .pc-ti {
+    display: grid;
+    grid-template-columns: 16em 1fr 7em 6em;
+    align-items: center;
+    gap: 1.2em;
+    height: 3.6em;
+    border-bottom: 1px solid var(--line);
+    font-size: 1.05em;
+  }
+  .pc-ti b,
+  .pc-ex b {
+    text-align: right;
+  }
+  .pc-ti-bar {
+    height: 0.6em;
+    overflow: hidden;
+    border-radius: 1em;
+    background: #f1efec;
+  }
+  .pc-ti-bar i {
+    display: block;
+    height: 100%;
+    border-radius: 1em;
+    background: var(--lav);
+  }
+  .pc-ex {
+    display: grid;
+    grid-template-columns: 1fr 8em 8em;
+    align-items: center;
+    height: 3.6em;
+    border-bottom: 1px solid var(--line);
+    font-size: 1.05em;
+  }
+  .pc-ex-total {
+    border-bottom: 0;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .pc-pill-warn {
+    padding: 0.2em 0.7em;
+    border-radius: 2em;
+    background: #fff4dc;
+    color: #9a6200;
+    font-size: 0.95em;
+    font-weight: 700;
+  }
+  .pc-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .pc-card-title {
+    font-size: 1.3em;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .pc-legend-inline {
+    display: flex;
+    gap: 1.4em;
+    font-size: 1em;
+    color: var(--muted);
+  }
+  .pc-legend-inline span {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+  }
+  .pc-lg-ink {
+    width: 1.8em;
+    height: 0.25em;
+    border-radius: 1em;
+    background: var(--ink);
+  }
+  .pc-kpi {
+    margin-top: 0.2em !important;
+    font-size: 2.2em;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .pc-down {
+    font-size: 0.45em;
+    font-weight: 700;
+    color: var(--red);
+    vertical-align: middle;
+  }
+  .pc-chart {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-top: 1em;
+  }
+  .pc-grid {
+    stroke: var(--line);
+    stroke-width: 1;
+  }
+  .pc-event {
+    stroke: #b8b2ab;
+    stroke-width: 1;
+    stroke-dasharray: 3 4;
+  }
+  .pc-prev-line {
+    fill: none;
+    stroke: #c9c3bd;
+    stroke-width: 2;
+    stroke-dasharray: 6 5;
+  }
+  .pc-sales-line {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 2.6;
+    stroke-linejoin: round;
+    stroke-dasharray: 1;
+  }
+  .pc-dot-red {
+    fill: var(--red);
+    stroke: #fff;
+    stroke-width: 2;
+  }
+  .pc-ai-head {
+    display: flex;
+    align-items: center;
+    gap: 0.7em;
+  }
+  .pc-ai-head b {
+    font-size: 1.2em;
+  }
+  .pc-ai-avatar {
+    display: grid;
+    place-items: center;
+    width: 2.6em;
+    height: 2.6em;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--lav), #7c65f0);
+  }
+  .pc-ai-avatar svg {
+    width: 1.4em;
+    height: 1.4em;
+    fill: #fff;
+  }
+  .pc-ai-tag {
+    padding: 0.2em 0.7em;
+    border-radius: 2em;
+    background: #fff;
+    font-size: 0.95em;
+    font-weight: 700;
+    color: #5b45d6;
+  }
+  .pc-insight-title {
+    margin: 0.6em 0 0 !important;
+    font-size: 1.4em;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .pc-insight-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+  }
+  .pc-insight-list li {
+    display: flex;
+    gap: 0.6em;
+    font-size: 1.05em;
+  }
+  .pc-insight-list li::before {
+    content: '';
+    flex: none;
+    width: 0.45em;
+    height: 0.45em;
+    margin-top: 0.5em;
+    border-radius: 50%;
+    background: #7c65f0;
+  }
+  .pc-insight .pc-btn {
+    width: 13.33em; /* 16em at 1.2em text */
+    height: 3em; /* 3.6em */
+    border-radius: 0.8em;
+    font-size: 1.2em;
+  }
+  .pc-danger {
+    fill: rgb(232 28 28 / 0.07);
+  }
+  .pc-zero {
+    stroke: var(--red);
+    stroke-width: 1.4;
+    stroke-dasharray: 6 5;
+  }
+  .pc-cash-line {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 2.4;
+    stroke-linejoin: round;
+  }
+  .pc-axis {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    fill: var(--muted);
+  }
+
+  /* ---------------- Capital page (panel em; cursor targets in the frontmatter follow these) ---------------- */
+  .pc-cap-head {
+    align-items: flex-start;
+  }
+  .pc-cap-titles {
+    margin-right: auto;
+  }
+  .pc-cap-titles .pc-h1 {
+    margin-right: 0 !important;
+  }
+  .pc-cap-sub {
+    margin-top: 0.3em !important;
+    font-size: 1.1em;
+    color: var(--muted);
+  }
+  .pc-cap-head .pc-pill-green {
+    margin-top: 0.8em;
+  }
+  .pc-pill-green {
+    padding: 0.3em 0.8em;
+    border-radius: 2em;
+    background: #e3f5ea;
+    color: var(--green);
+    font-size: 0.95em;
+    font-weight: 700;
+  }
+  .pc-request {
+    width: 14.17em; /* 17em at 1.2em text */
+    height: 3em; /* 3.6em */
+    border-radius: 0.8em;
+    font-size: 1.2em;
+  }
+  .pc-builder {
+    left: 3em;
+    top: 12.4em;
+    width: 70em;
+    height: 30.4em;
+    overflow: hidden;
+    background:
+      radial-gradient(60% 90% at 100% 0%, rgb(165 148 249 / 0.22), transparent 70%),
+      #fff;
+  }
+  .pc-builder-label {
+    position: absolute;
+    left: 2.36em; /* 2.6em at 1.1em */
+    top: 2.2em;
+  }
+  .pc-big-amount {
+    position: absolute;
+    left: 0.62em; /* 2.6em at 4.2em */
+    top: 1em;
+    font-size: 4.2em;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    color: var(--ink);
+  }
+  .pc-ai-hint {
+    position: absolute;
+    right: 2.6em;
+    top: 5.4em;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.5em 1em;
+    border-radius: 2em;
+    background: var(--lav-soft);
+    color: #5b45d6;
+    font-size: 1.05em;
+    font-weight: 700;
+  }
+  .pc-ai-hint svg {
+    width: 1.2em;
+    height: 1.2em;
+    fill: #7c65f0;
+  }
+  .pc-track {
+    position: absolute;
+    left: 2.6em;
+    width: 64.8em;
+    top: 14.4em;
+    height: 0.6em;
+    border-radius: 1em;
+    background: #eeebe7;
+  }
+  .pc-track-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    border-radius: 1em;
+    background: linear-gradient(90deg, #ff6a5f, var(--red));
+    transform-origin: left;
+  }
+  .pc-thumb {
+    position: absolute;
+    top: -1em;
+    width: 2.6em;
+    height: 2.6em;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0.2em 0.6em rgb(0 0 0 / 0.25), 0 0 0 0.35em rgb(232 28 28 / 0.15);
+  }
+  .pc-ai-pick {
+    position: absolute;
+    top: -0.5em;
+    width: 0.3em;
+    height: 1.6em;
+    margin-left: -0.15em;
+    border-radius: 1em;
+    background: #7c65f0;
+  }
+  .pc-track-scale {
+    position: absolute;
+    left: 2.6em;
+    width: 64.8em;
+    top: 16.4em;
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+  }
+  .pc-rate-label {
+    position: absolute;
+    left: 2.6em;
+    top: 19.4em;
+  }
+  .pc-rates {
+    position: absolute;
+    left: 2.6em;
+    right: 2.6em;
+    top: 21.6em;
+    display: flex;
+    align-items: center;
+    gap: 1.6em;
+  }
+  .pc-rate {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 12em;
+    height: 3.6em;
+    border: 1px solid var(--line);
+    border-radius: 0.9em;
+    background: #fff;
+  }
+  .pc-rate > b {
+    position: relative;
+    font-size: 1.25em;
+  }
+  .pc-rate-on {
+    position: absolute;
+    inset: -1px;
+    border: 0.25em solid var(--ink);
+    border-radius: 0.9em;
+  }
+  .pc-rate-note {
+    font-size: 1.05em;
+  }
+
+  .pc-offer {
+    left: 75em;
+    top: 12.4em;
+    width: 44.4em;
+    height: 30.4em;
+  }
+  .pc-ring-wrap {
+    position: absolute;
+    left: 2.4em;
+    top: 5em;
+    width: 15em;
+    height: 15em;
+  }
+  .pc-ring {
+    width: 100%;
+    height: 100%;
+    transform-origin: center;
+  }
+  .pc-ring circle {
+    fill: none;
+    stroke-width: 12;
+    transform: rotate(-90deg);
+    transform-origin: 60px 60px;
+  }
+  .pc-ring-track {
+    stroke: #f1efec;
+  }
+  .pc-ring-adv {
+    stroke: var(--red);
+    stroke-linecap: round;
+  }
+  .pc-ring-fee {
+    stroke: var(--lav);
+    stroke-linecap: round;
+  }
+  .pc-ring-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .pc-ring-center span {
+    font-size: 0.95em;
+    color: var(--muted);
+  }
+  .pc-ring-center b {
+    font-size: 1.9em;
+    letter-spacing: -0.02em;
+  }
+  .pc-offer-legend {
+    position: absolute;
+    left: 20.4em;
+    right: 2.2em;
+    top: 6.6em;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+  }
+  .pc-offer-legend > div {
+    display: grid;
+    grid-template-columns: 1em 1fr auto;
+    align-items: center;
+    gap: 0.6em;
+    height: 3.4em;
+    border-bottom: 1px solid var(--line);
+    font-size: 1.05em;
+  }
+  .pc-dot-adv,
+  .pc-dot-fee,
+  .pc-dot-day {
+    width: 0.8em;
+    height: 0.8em;
+    border-radius: 50%;
+    background: var(--red);
+  }
+  .pc-dot-fee {
+    background: var(--lav);
+  }
+  .pc-dot-day {
+    background: var(--ink);
+  }
+  .pc-payback {
+    position: absolute;
+    left: 2.18em; /* 2.4em at 1.1em */
+    top: 20.2em;
+    font-size: 1.1em;
+    color: var(--muted);
+  }
+  .pc-timeline {
+    position: absolute;
+    left: 2.4em;
+    right: 2.2em;
+    top: 24.4em;
+  }
+  .pc-tl-bar {
+    position: relative;
+    height: 1em;
+    overflow: hidden;
+    border-radius: 1em;
+    background: repeating-linear-gradient(90deg, #f1efec 0 calc(12.5% - 0.15em), #fff calc(12.5% - 0.15em) 12.5%);
+  }
+  .pc-tl-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    border-radius: 1em;
+    background: linear-gradient(90deg, var(--lav), var(--green));
+  }
+  .pc-tl-fill i {
+    position: absolute;
+    right: 0.15em;
+    top: 0.15em;
+    width: 0.7em;
+    height: 0.7em;
+    border-radius: 50%;
+    background: #fff;
+  }
+  .pc-tl-months {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    margin-top: 0.5em;
+    font-size: 0.95em;
+    color: var(--muted);
+  }
+
+  .pc-projcard {
+    left: 3em;
+    top: 45em;
+    width: 116.4em;
+    height: 29.6em;
+  }
+  .pc-outs-v {
+    position: absolute;
+    left: 2.4em;
+    top: 6.4em;
+    width: 22em;
+    display: flex;
+    flex-direction: column;
+    gap: 1.6em;
+  }
+  .pc-outs-v > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2em;
+    padding-bottom: 1.2em;
+    border-bottom: 1px solid var(--line);
+    font-size: 1.05em;
+  }
+  .pc-outs-v b {
+    font-size: 2.6em;
+    letter-spacing: -0.03em;
+  }
+  .pc-proj {
+    position: absolute;
+    left: 28em;
+    top: 5.4em;
+    width: 86em;
+    height: auto;
+  }
+  .pc-holiday {
+    fill: rgb(165 148 249 / 0.14);
+  }
+  .pc-holiday-label {
+    fill: #5b45d6;
+    font-weight: 700;
+  }
+  .pc-base-line {
+    fill: none;
+    stroke: #b8b2ab;
+    stroke-width: 2;
+    stroke-dasharray: 7 6;
+  }
+  .pc-proj-line {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 3;
+    stroke-linejoin: round;
+  }
+  .pc-proj-area {
+    fill: rgb(31 157 85 / 0.1);
+  }
+  .pc-paid-line {
+    stroke: var(--ink);
+    stroke-width: 1.2;
+    stroke-dasharray: 3 4;
+  }
+  .pc-paid-label {
+    fill: var(--ink);
+    font-weight: 700;
+  }
+  .pc-lg-green,
+  .pc-lg-dash {
+    width: 1.8em;
+    height: 0.25em;
+    border-radius: 1em;
+    background: var(--green);
+  }
+  .pc-lg-dash {
+    background: repeating-linear-gradient(90deg, #b8b2ab 0 0.4em, transparent 0.4em 0.7em);
+  }
+  .pc-scene-capital .pc-toast {
+    top: auto;
+    right: auto;
+    left: 22em;
+    bottom: 3em;
+  }
+
+  @keyframes pc-scene-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes pc-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+  @keyframes pc-nfc {
+    0%,
+    100% {
+      opacity: 0.25;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+</style>

@@ -1,0 +1,27 @@
+---
+import Base from '../layouts/Base.astro';
+import Nav from '../components/Nav.astro';
+import Hero from '../components/Hero.astro';
+import About from '../components/About.astro';
+import CaseStudy from '../components/CaseStudy.astro';
+import Writing from '../components/Writing.astro';
+import Footer from '../components/Footer.astro';
+import { caseStudies } from '../data/content';
+---
+
+<Base>
+  <Nav />
+  <main>
+    <Hero />
+    <About />
+    <section id="work" aria-label="Selected work">
+      {caseStudies.map((study, i) => (
+        <div class={i % 2 === 1 ? 'bg-surface' : ''}>
+          <CaseStudy study={study} />
+        </div>
+      ))}
+    </section>
+    <Writing />
+  </main>
+  <Footer />
+</Base>

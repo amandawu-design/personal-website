@@ -1,0 +1,32 @@
+---
+const words = [
+  { mode: 'strategize', text: 'strategize', after: ',' },
+  { mode: 'design', text: 'design', after: '' },
+];
+---
+
+<section
+  class="mx-auto flex h-[calc(100svh-var(--nav-h))] max-h-[1000px] min-h-[540px] max-w-[1200px] flex-col px-6 pb-4 pt-8 md:px-10 md:pt-14"
+  aria-label="Intro"
+>
+  <h1 class="text-center font-serif text-[length:min(19vw,8.6svh)] leading-[1.0] md:text-[clamp(2.9rem,8vw,6.5rem)] md:leading-[1.02] tracking-[-0.015em] text-balance">
+    I help ambitious team<br class="hidden md:inline" />{' '}
+    <span class="hero-words" data-hero-words>
+      {words.map((w) => (
+        <>
+          <em class="hero-word font-medium text-accent" data-mode={w.mode}>{w.text}</em>{w.after}{' '}
+        </>
+      ))}
+      <span class="whitespace-nowrap">and <em class="hero-word font-medium text-accent" data-mode="build">build</em>.</span>
+    </span>
+  </h1>
+
+  <div class="hero-canvas-wrap relative mx-auto min-h-0 w-full max-w-[900px] flex-1" data-hero-canvas aria-hidden="true">
+    <div class="hero-fallback absolute left-1/2 top-1/2 aspect-square h-3/5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_35%_30%,#f1e9ff,#b9b6f0_45%,#6f73b8)] opacity-0 transition-opacity duration-700"></div>
+  </div>
+</section>
+
+<script>
+  import { initHero } from '../scripts/hero-scene';
+  initHero();
+</script>

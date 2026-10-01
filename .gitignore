@@ -1,0 +1,16 @@
+# dependencies and build output
+node_modules/
+dist/
+.astro/
+
+# local tooling and OS files
+.claude/
+.DS_Store
+
+# one-off import notes, not part of the site
+IMPORT-WITH-CLAUDE-CODE.md
+
+# environment
+.env
+.env.*
+!.env.example

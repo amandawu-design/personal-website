@@ -1,0 +1,69 @@
+---
+import type { CaseStudy as CS } from '../data/content';
+import BankPortal from './BankPortal.astro';
+import AiOnboarding from './AiOnboarding.astro';
+import PosCapital from './PosCapital.astro';
+
+interface Props {
+  study: CS;
+}
+const { study } = Astro.props;
+---
+
+<article class="mx-auto max-w-[1200px] px-6 py-20 md:max-w-[1080px] md:px-10 md:py-[135px]">
+  <div class="flex flex-col gap-5">
+    <h2 class="font-serif text-[clamp(2.2rem,4.4vw,3.6rem)] leading-[1.08] text-pretty">{study.title}</h2>
+    <ul class="flex gap-2">
+      {study.tags.map((t) => (
+        <li
+          class:list={[
+            'rounded-full px-3 py-1 text-[13px] font-medium uppercase tracking-[0.08em]',
+            t.primary ? 'bg-accent-fill text-white' : 'border border-line bg-surface',
+          ]}
+        >
+          {t.label}
+        </li>
+      ))}
+    </ul>
+  </div>
+
+  {
+    study.visual ? (
+      // Animated visuals have their own controls, so they aren't wrapped in the case study link
+      <div class="mt-10 md:mt-8">
+        {study.visual === 'bank-portal' ? <BankPortal /> : study.visual === 'ai-onboarding' ? <AiOnboarding /> : <PosCapital />}
+      </div>
+    ) : (
+      <a href={study.href ?? '#'} class="group mt-10 block overflow-hidden rounded-md md:mt-8">
+        {
+          study.image ? (
+            <img
+              src={study.image}
+              alt={study.imageAlt}
+              loading="lazy"
+              class="aspect-[16/8.64] w-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
+            />
+          ) : (
+            <div
+              role="img"
+              aria-label={study.imageAlt}
+              class="grid aspect-[16/8.64] w-full place-items-center bg-[linear-gradient(160deg,#27384f,#141c2a_55%,#3a2d24)] text-[15px] uppercase tracking-[0.12em] text-white/50"
+            >
+              Image placeholder
+            </div>
+          )
+        }
+      </a>
+    )
+  }
+
+  <div class="mt-8 grid grid-cols-2 gap-8 md:grid-cols-[2.2fr_0.6fr_0.6fr] md:gap-6">
+    <p class="col-span-2 max-w-[560px] text-[17px] leading-relaxed md:col-span-1 md:text-[19px]">{study.lede}</p>
+    {study.metrics.map((m) => (
+      <div>
+        <p class="font-serif text-[2.5rem] leading-none text-accent">{m.value}</p>
+        <p class="mt-1.5 max-w-[150px] text-[12px] uppercase leading-snug tracking-[0.08em] text-caption">{m.label}</p>
+      </div>
+    ))}
+  </div>
+</article>

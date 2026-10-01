@@ -1,0 +1,42 @@
+---
+import { social } from '../data/content';
+
+interface Props {
+  size?: number; // icon size in px
+  class?: string;
+}
+const { size = 24, class: className = '' } = Astro.props;
+---
+
+<ul class:list={['flex items-center gap-3', className]}>
+  <li>
+    <a href={`mailto:${social.email}`} aria-label="Email" class="block text-accent transition-opacity hover:opacity-60">
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path
+          fill-rule="evenodd"
+          d="M4.5 4A2.5 2.5 0 0 0 2 6.5v11A2.5 2.5 0 0 0 4.5 20h15a2.5 2.5 0 0 0 2.5-2.5v-11A2.5 2.5 0 0 0 19.5 4h-15Zm.86 2.9a.9.9 0 0 0-1.12 1.4l6.93 5.56a1.35 1.35 0 0 0 1.66 0l6.93-5.56a.9.9 0 1 0-1.12-1.4L12 12.23 5.36 6.9Z"
+        />
+      </svg>
+    </a>
+  </li>
+  <li>
+    <a href={social.linkedin} target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" class="block text-accent transition-opacity hover:opacity-60">
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path
+          fill-rule="evenodd"
+          d="M5 2h14a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3Zm1.4 7.6V18h2.8V9.6H6.4Zm1.4-4.1a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2Zm3.3 4.1V18h2.8v-4.4c0-1.2.5-2 1.5-2s1.4.8 1.4 2V18h2.8v-5.1c0-2.4-1.3-3.5-3.1-3.5-1.3 0-2.1.6-2.6 1.3V9.6h-2.8Z"
+        />
+      </svg>
+    </a>
+  </li>
+  <li>
+    <a href={social.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" class="block text-accent transition-opacity hover:opacity-60">
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path
+          fill-rule="evenodd"
+          d="M7.5 2h9A5.5 5.5 0 0 1 22 7.5v9a5.5 5.5 0 0 1-5.5 5.5h-9A5.5 5.5 0 0 1 2 16.5v-9A5.5 5.5 0 0 1 7.5 2ZM12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0 1.9a3.1 3.1 0 1 1 0 6.2 3.1 3.1 0 0 1 0-6.2Zm5.4-3.5a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Z"
+        />
+      </svg>
+    </a>
+  </li>
+</ul>

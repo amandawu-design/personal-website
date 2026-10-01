@@ -1,0 +1,996 @@
+---
+// Animated concept for the onboarding case study: an AI guide ("Tracy") helps
+// a Gen Z customer open their first investing account, by text and voice.
+// The chat runs on a phone; Tracy floats around it, watches what the user
+// types or says and reacts to it. Dark visual style after x.ai/bot.
+//
+// Sized in em (1em = 1/160 of the frame width) so it scales like an image.
+// Timings are percentages of --T. It loops; a single dash below the frame
+// shows progress and pauses / resumes on click. Without JS, or with
+// prefers-reduced-motion, the static state shows the finished conversation.
+
+import { createTimeline, type Point } from '../scripts/timeline';
+
+const T = '28s';
+const { n, kf, between, outside, press, reveal, transient, select, path, css } = createTimeline();
+
+// Conversation beats (percent of T)
+const beat = {
+  intro: 1.5,
+  langQ: 6,
+  langPick: 11,
+  langA: 12.5,
+  whyQ: 15,
+  listen: [19, 26.5] as const,
+  whyA: 26.5,
+  think1: [28, 32.5] as const,
+  expQ: 32.5,
+  expPick: 37,
+  expA: 38.5,
+  think2: [40, 43.5] as const,
+  account: 43.5,
+  open: 50,
+  think3: [51, 55.5] as const,
+  offer: 55.5,
+  claim: 62,
+  think4: [63, 67] as const,
+  congrats: 67,
+  buy: 76,
+  bought: 78,
+};
+
+/* ---------- Tracy: where she floats, where she looks, how she reacts ---------- */
+
+// Face position (top-left, frame em). The phone spans x 63.2–96.8, so she parks
+// on its left (x≈44) while she's talking and on its right (x≈105) by the user's
+// replies, crossing in front of the phone when she switches sides.
+const float: Point[] = [
+  [0, 42, 14],
+  [5, 44, 16],
+  [11, 46, 24],
+  [14, 105, 50],
+  [18, 106, 47],
+  [20.5, 104, 60],
+  [26.5, 104, 60],
+  [29, 108, 30],
+  [32.5, 108, 30],
+  [35, 106, 46],
+  [39.5, 105, 52],
+  [41, 108, 30],
+  [43.5, 108, 30],
+  [46, 44, 40],
+  [50.5, 45, 46],
+  [52.5, 42, 26],
+  [56, 44, 40],
+  [62, 45, 46],
+  [64, 42, 24],
+  [67, 42, 24],
+  [70, 106, 38],
+  [77, 105, 52],
+  [80, 104, 18],
+  [100, 104, 18],
+];
+// Gaze: eye offset (em) toward what she's looking at. Changes are quick glances.
+const gaze: Point[] = [
+  [0, 1, 0.6], // at the phone, from the left
+  [11, 1.2, 1.1], // the language chips
+  [14, -1.2, 0.7], // the user's reply, from the right
+  [20.5, -1.2, 1.2], // the mic / waveform
+  [27, -0.4, 0.7], // reading the transcript…
+  [27.8, -1.4, 0.7], // …left to right
+  [29, 0.4, -1.3], // thinking: eyes up
+  [32.5, -1.2, 0.6],
+  [39.5, -1.2, 0.9],
+  [41, 0.4, -1.3],
+  [44, 1.2, 0.6], // from the left: the account card
+  [52.5, -0.4, -1.3],
+  [56, 1.2, 0.6],
+  [64, -0.4, -1.3],
+  [70, -1.2, 0.6],
+  [77, -1.2, 0.9],
+  [80, 0, 0],
+];
+const glance = (name: string, pts: Point[]) =>
+  kf(
+    name,
+    pts
+      .map(([p, x, y], i) => {
+        const hold = i > 0 ? `${n(Math.max(0, p - 0.6))}%{transform:translate(${pts[i - 1][1]}em,${pts[i - 1][2]}em)}` : '';
+        return `${hold}${p}%{transform:translate(${x}em,${y}em)}`;
+      })
+      .join('') + `100%{transform:translate(${pts.at(-1)![1]}em,${pts.at(-1)![2]}em)}`,
+  );
+// Eyes widen when something exciting shows up
+const widen = (name: string, ranges: [number, number][]) =>
+  kf(name, '0%{transform:none}' + ranges.map(([a, b]) => `${a}%{transform:none}${n(a + 0.8)}%,${n(b - 0.8)}%{transform:scale(1.3)}${b}%{transform:none}`).join('') + '100%{transform:none}');
+// Emoji reaction bubbles: pop in at a, float off at b
+const pop = (a: number, b: number) =>
+  kf(
+    `ob-pop-${String(a).replace('.', '_')}`,
+    `0%,${n(a - 0.3)}%{opacity:0;transform:translateY(.6em) scale(.4)}${n(a + 1)}%{opacity:1;transform:scale(1.15)}${n(a + 2)}%,${n(b - 1)}%{opacity:1;transform:none}${b}%,100%{opacity:0;transform:translateY(-1.2em) scale(.9)}`,
+  );
+const reactions: [emoji: string, from: number, to: number][] = [
+  ['👍', 13.5, 18],
+  ['🔥', 28, 31],
+  ['🤝', 39.5, 42],
+  ['✨', 50.5, 53],
+  ['👀', 56, 60],
+  ['💸', 62.5, 65],
+  ['🎉', 78.5, 99],
+];
+const statuses: [text: string, from: number, to: number][] = [
+  ['Listening…', beat.listen[0], beat.listen[1]],
+  ['Reading…', beat.listen[1], beat.think1[0]],
+  ['Thinking…', beat.think1[0], beat.expQ],
+  ['Finding the right account…', beat.think2[0], beat.account],
+  ['Checking linked accounts…', beat.think3[0], beat.offer],
+  ['Opening your account…', beat.think4[0], beat.congrats],
+];
+
+const TR = {
+  float: path('ob-float', float),
+  gaze: glance('ob-gaze', gaze),
+  widen: widen('ob-widen', [
+    [26.8, 31],
+    [55.8, 59],
+    [78, 84],
+  ]),
+  cheer: kf('ob-cheer', `0%,${beat.bought}%{transform:none}${n(beat.bought + 1.2)}%{transform:scale(1.12) rotate(-8deg)}${n(beat.bought + 2.4)}%{transform:scale(1.05) rotate(6deg)}${n(beat.bought + 3.6)}%,100%{transform:none}`),
+  listening: between(...beat.listen),
+  reactions: reactions.map(([emoji, a, b]) => ({ emoji, anim: pop(a, b) })),
+  statuses: statuses.map(([text, a, b]) => ({ text, anim: between(a, b) })),
+};
+
+// Chat rows, chip picks, button presses and the composer
+const R = {
+  intro: reveal(beat.intro),
+  langQ: reveal(beat.langQ),
+  langPick: select(beat.langPick),
+  langA: reveal(beat.langA),
+  whyQ: reveal(beat.whyQ),
+  whyA: reveal(beat.whyA),
+  think1: transient(...beat.think1),
+  expQ: reveal(beat.expQ),
+  expPick: select(beat.expPick),
+  expA: reveal(beat.expA),
+  think2: transient(...beat.think2),
+  account: reveal(beat.account),
+  open: press(beat.open),
+  think3: transient(...beat.think3),
+  offer: reveal(beat.offer),
+  claim: press(beat.claim),
+  think4: transient(...beat.think4),
+  congrats: reveal(beat.congrats),
+  buy: press(beat.buy),
+  bought: reveal(beat.bought),
+  idle: outside(...beat.listen),
+  listening: between(...beat.listen),
+};
+
+
+const chip = {
+  '--from-bg': 'linear-gradient(#171717,#171717) padding-box,linear-gradient(90deg,#57cf80,#59d3fd) border-box',
+  '--from-fg': '#f2f2f2',
+  '--to-bg': 'linear-gradient(120deg,#04b741,#59d3fd) padding-box,linear-gradient(120deg,#04b741,#59d3fd) border-box',
+  '--to-fg': '#0a0a0a',
+};
+const chipVars = Object.entries(chip).map(([k, v]) => `${k}:${v}`).join(';');
+const languages = ['English', 'Français', '廣東話', 'Español', 'ਪੰਜਾਬੀ', 'हिन्दी', 'ᐃᓄᒃᑎᑐᑦ'];
+
+const a = (name: string) => `--a:${name}`;
+const generatedCss = css();
+---
+
+<div class="ob-root" data-ai-onboarding style={`--T:${T}`}>
+  <div
+    class="ob"
+    role="img"
+    aria-label="Animated concept: on a phone, Tracy, an AI guide, helps a first-time investor open an account by chat and voice. She floats beside the chat, reacts to each answer, asks for a language, the reason for opening the account and trading experience, recommends a cash account, applies a $500 welcome offer, opens the account and helps buy a first share."
+    data-ob-frame
+  >
+    <div class="ob-stage" aria-hidden="true">
+      <!-- ================= Tracy, floating around the phone ================= -->
+      <div class="ob-tracy ob-a" style={a(TR.float)}>
+        <div class="ob-bob">
+          <span class="ob-listen ob-a ob-hide" style={a(TR.listening)}><i></i><i></i></span>
+          <div class="ob-face ob-a" style={a(TR.cheer)}>
+            <div class="ob-eyes ob-a" style={a(TR.gaze)}>
+              <div class="ob-eyes-size ob-a" style={a(TR.widen)}>
+                <span class="ob-eye"></span><span class="ob-eye"></span>
+              </div>
+            </div>
+          </div>
+          {TR.reactions.map((r) => <span class="ob-react ob-a ob-hide" style={a(r.anim)}>{r.emoji}</span>)}
+          <span class="ob-tag">
+            {TR.statuses.map((st) => (
+              <span class="ob-a ob-hide" style={a(st.anim)}><i class="ob-pulse"></i>{st.text}</span>
+            ))}
+          </span>
+        </div>
+      </div>
+
+      <!-- ================= Phone chat ================= -->
+      <div class="ob-phone">
+        <div class="ob-screen">
+          <div class="ob-statusbar">
+            <span>9:41</span>
+            <span class="ob-island"></span>
+            <svg viewBox="0 0 34 12"><rect x="0" y="8" width="3" height="4" rx="1" /><rect x="5" y="5" width="3" height="7" rx="1" /><rect x="10" y="2" width="3" height="10" rx="1" /><rect x="18" y="1" width="16" height="10" rx="3" /></svg>
+          </div>
+
+          <div class="ob-head">
+            <span class="ob-round"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg></span>
+            <span class="ob-who"><span class="ob-mini-face"><i></i><i></i></span>Tracy</span>
+            <span class="ob-round"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5v14" /></svg></span>
+          </div>
+
+          <div class="ob-thread">
+            <!-- intro -->
+            <div class="ob-row ob-a" style={a(R.intro)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-bot">Hey Amanda! 👋 I’m Tracy, your AI guide. Let’s open your first account. It takes about 3 minutes.</p>
+            </div></div></div>
+
+            <!-- language -->
+            <div class="ob-row ob-a" style={a(R.langQ)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-bot">First up: which language do you prefer?</p>
+              <div class="ob-chips">
+                {languages.map((l, i) => (
+                  <span class:list={['ob-chip', i === 0 && 'ob-a is-picked']} style={i === 0 ? `${chipVars};${a(R.langPick)}` : undefined}>{l}</span>
+                ))}
+              </div>
+            </div></div></div>
+            <div class="ob-row ob-a" style={a(R.langA)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-user">English</p>
+            </div></div></div>
+
+            <!-- why -->
+            <div class="ob-row ob-a" style={a(R.whyQ)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-bot">Tell me more about why you’re opening this account. Tap an answer or just say it.</p>
+              <div class="ob-chips ob-chips-stack">
+                <span class="ob-chip">🏡 Saving for my first home</span>
+                <span class="ob-chip">🏖️ Saving for retirement</span>
+                <span class="ob-chip">🤑 I want to be rich</span>
+              </div>
+            </div></div></div>
+            <div class="ob-row ob-a" style={a(R.whyA)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-user ob-voice">
+                <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>
+                I heard GameStop is a good stock. All my friends are buying it, I want one too.
+              </p>
+            </div></div></div>
+            <div class="ob-row ob-a ob-gone" style={a(R.think1)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-working"><span class="ob-dots"><i></i><i></i><i></i></span>Tracy is thinking</p>
+            </div></div></div>
+
+            <!-- experience -->
+            <div class="ob-row ob-a" style={a(R.expQ)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-bot">GameStop is lit 🔥 How much trading experience do you have?</p>
+              <div class="ob-chips ob-chips-stack">
+                <span class="ob-chip ob-a is-picked" style={`${chipVars};${a(R.expPick)}`}>🐣 Never traded before</span>
+                <span class="ob-chip">😎 Done it a few times</span>
+                <span class="ob-chip">🧠 Very experienced</span>
+              </div>
+            </div></div></div>
+            <div class="ob-row ob-a" style={a(R.expA)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-user">Never traded before</p>
+            </div></div></div>
+            <div class="ob-row ob-a ob-gone" style={a(R.think2)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-working"><span class="ob-dots"><i></i><i></i><i></i></span>Finding the right account</p>
+            </div></div></div>
+
+            <!-- account recommendation -->
+            <div class="ob-row ob-a" style={a(R.account)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-bot">No stress, I’ve got you. For your goal, I’d start here:</p>
+              <div class="ob-card-msg">
+                <p class="ob-card-title">Cash Account</p>
+                <p class="ob-card-text">Buy, hold and sell stocks and ETFs. $0 account fees, start with any amount.</p>
+                <span class="ob-cta ob-a" style={a(R.open)}>Open this account</span>
+              </div>
+            </div></div></div>
+            <div class="ob-row ob-a ob-gone" style={a(R.think3)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-working"><span class="ob-dots"><i></i><i></i><i></i></span>Checking your linked accounts</p>
+            </div></div></div>
+
+            <!-- welcome offer -->
+            <div class="ob-row ob-a" style={a(R.offer)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-bot">Based on your linked accounts, you unlocked a welcome offer 👀</p>
+              <div class="ob-card-msg ob-glow">
+                <p class="ob-card-title">$500 cash back</p>
+                <p class="ob-card-text">When you transfer an account by July 31.</p>
+                <span class="ob-cta ob-a" style={a(R.claim)}>Claim</span>
+              </div>
+            </div></div></div>
+            <div class="ob-row ob-a ob-gone" style={a(R.think4)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-working"><span class="ob-dots"><i></i><i></i><i></i></span>Opening your account</p>
+            </div></div></div>
+
+            <!-- first trade -->
+            <div class="ob-row ob-a" style={a(R.congrats)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-bot">Congrats 🎉 Your account is open. Ready to buy your first share?</p>
+              <div class="ob-card-msg">
+                <p class="ob-card-title"><span class="ob-ticker">GME</span> GameStop</p>
+                <div class="ob-kv"><span>Market price</span><b>$23.28</b></div>
+                <div class="ob-kv"><span>Quantity</span><b>1</b></div>
+                <div class="ob-kv"><span>Fee</span><b>$0</b></div>
+                <span class="ob-cta ob-a" style={a(R.buy)}>Buy</span>
+              </div>
+            </div></div></div>
+            <div class="ob-row ob-a" style={a(R.bought)}><div class="ob-clip"><div class="ob-msg">
+              <p class="ob-done"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9" /></svg>You own 1 share of GME</p>
+            </div></div></div>
+          </div>
+
+          <div class="ob-composer">
+            <span class="ob-round ob-plus"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5v14" /></svg></span>
+            <span class="ob-field">
+              <span class="ob-field-idle ob-a" style={a(R.idle)}>
+                Message Tracy
+                <span class="ob-mic-btn"><svg class="ob-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg></span>
+              </span>
+              <span class="ob-field-listen ob-a ob-hide" style={a(R.listening)}>
+                <span class="ob-wave">{Array.from({ length: 16 }, (_, i) => <i style={`--d:${(i * 97) % 700}ms;--c:color-mix(in oklab, #a78bfa ${100 - i * 6}%, #59d3fd)`}></i>)}</span>
+                Listening…
+              </span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- One dash: shows progress; click to pause / resume -->
+  <div class="mt-3 flex justify-center">
+    <button type="button" class="ob-dash-btn group grid h-6 w-8 place-items-center rounded-sm" aria-label="Pause animation" data-ob-toggle>
+      <span class="relative block h-[3px] w-6 overflow-hidden rounded-full bg-ink/15 transition-colors group-hover:bg-ink/30">
+        <span class="ob-progress" aria-hidden="true"></span>
+      </span>
+    </button>
+  </div>
+</div>
+
+<style is:inline set:html={generatedCss}></style>
+
+<script>
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  document.querySelectorAll<HTMLElement>('[data-ai-onboarding]').forEach((root) => {
+    const frame = root.querySelector<HTMLElement>('[data-ob-frame]')!;
+    const toggle = root.querySelector<HTMLButtonElement>('[data-ob-toggle]')!;
+    if (reduceMotion) {
+      toggle.hidden = true;
+      return;
+    }
+    let started = false;
+    let userPaused = false;
+    let onScreen = false;
+
+    const sync = () => {
+      root.toggleAttribute('data-paused', userPaused || !onScreen);
+      toggle.setAttribute('aria-label', userPaused ? 'Play animation' : 'Pause animation');
+    };
+    const restart = () => {
+      root.removeAttribute('data-play');
+      void root.offsetWidth;
+      root.setAttribute('data-play', '');
+    };
+
+    toggle.addEventListener('click', () => {
+      if (!started) return;
+      userPaused = !userPaused;
+      sync();
+    });
+    // loop: when the progress dash fills, start over
+    root.addEventListener('animationend', (e) => {
+      if (e.animationName === 'ob-progress') restart();
+    });
+    new IntersectionObserver(
+      ([entry]) => {
+        onScreen = entry.isIntersecting;
+        if (onScreen && !started) {
+          started = true;
+          root.setAttribute('data-play', '');
+        }
+        sync();
+      },
+      { threshold: 0.3 },
+    ).observe(frame);
+  });
+</script>
+
+<style>
+  .ob {
+    --bg: #0a0a0a;
+    --fg: #f2f2f2;
+    --muted: rgb(255 255 255 / 0.5);
+    --faint: rgb(255 255 255 / 0.075);
+    --hair: rgb(255 255 255 / 0.08);
+    --cyan: #19c1da;
+    --green: #04b741;
+    --sky: #59d3fd;
+    --grad: linear-gradient(120deg, var(--green), #2fc6a0 55%, var(--sky)); /* the reference's card gradient */
+
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 8.64;
+    overflow: hidden;
+    border-radius: 0.375rem;
+    background:
+      radial-gradient(30% 55% at 42% 42%, rgb(4 183 65 / 0.14), transparent 70%),
+      radial-gradient(30% 55% at 58% 58%, rgb(89 211 253 / 0.12), transparent 70%),
+      var(--bg);
+    container-type: inline-size;
+  }
+  .ob-stage {
+    position: absolute;
+    inset: 0;
+    font-size: calc(100cqw / 160); /* 1em = 1/160 of the frame width */
+    font-family: var(--font-sans);
+    line-height: 1.35;
+    color: var(--fg);
+  }
+  .ob p {
+    margin: 0;
+  }
+  .ob i {
+    font-style: normal;
+  }
+
+  /* Timeline */
+  .ob-hide {
+    opacity: 0;
+  }
+  .ob-row.ob-gone {
+    grid-template-rows: 0fr; /* transient rows are collapsed in the static state */
+    opacity: 0;
+  }
+  .ob-root[data-play] .ob-a {
+    animation-name: var(--a);
+    animation-duration: var(--T);
+    animation-timing-function: ease-in-out;
+    animation-fill-mode: both;
+  }
+  .ob-root[data-paused] *,
+  .ob-root[data-paused] *::before,
+  .ob-root[data-paused] *::after {
+    animation-play-state: paused !important;
+  }
+  .ob-progress {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--color-ink) 55%, transparent);
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+  .ob-root[data-play] .ob-progress {
+    animation: ob-progress var(--T) linear both;
+  }
+  .ob-swap {
+    display: inline-grid;
+  }
+  .ob-swap > span {
+    grid-area: 1 / 1;
+    white-space: nowrap;
+  }
+
+  /* ---------------- Tracy ---------------- */
+  .ob-tracy {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 3;
+    transform: translate(104em, 18em); /* static state: resting to the right of the phone */
+  }
+  .ob-bob {
+    position: relative;
+    width: 11em;
+    height: 11em;
+  }
+  .ob-root[data-play] .ob-bob {
+    animation: ob-bob 3.2s ease-in-out infinite;
+  }
+  .ob-face {
+    position: relative;
+    width: 11em;
+    height: 11em;
+    border-radius: 50%;
+    background: #f5f5f5;
+    box-shadow: -1.5em -1em 5em rgb(4 183 65 / 0.22), 1.5em 1em 5em rgb(89 211 253 / 0.22), 0 1.2em 3em rgb(0 0 0 / 0.5);
+  }
+  .ob-eyes {
+    position: absolute;
+    left: 2.9em;
+    top: 2.7em;
+  }
+  .ob-eyes-size {
+    display: flex;
+    gap: 2.3em;
+  }
+  .ob-eye {
+    display: block;
+    width: 1.15em;
+    height: 2.7em;
+    border-radius: 1em;
+    background: #0a0a0a;
+    transform: rotate(24deg);
+  }
+  .ob-root[data-play] .ob-eye {
+    animation: ob-blink 4.2s ease-in-out infinite;
+  }
+  .ob-react {
+    position: absolute;
+    right: -0.8em; /* sizes here are relative to the 2.2em emoji */
+    top: -0.75em;
+    display: grid;
+    place-items: center;
+    width: 2.1em;
+    height: 2.1em;
+    border-radius: 50%;
+    background: #1c1c1a;
+    box-shadow: inset 0 0 0 1px var(--hair), 0 0.3em 0.8em rgb(0 0 0 / 0.5);
+    font-size: 2.2em;
+    line-height: 1;
+  }
+  .ob-listen {
+    position: absolute;
+    inset: 0;
+  }
+  .ob-listen i {
+    position: absolute;
+    inset: 0;
+    border: 0.2em solid var(--green);
+    border-radius: 50%;
+    opacity: 0;
+  }
+  .ob-root[data-play] .ob-listen i {
+    animation: ob-ring 1.6s ease-out infinite;
+  }
+  .ob-listen i + i {
+    border-color: var(--sky);
+  }
+  .ob-root[data-play] .ob-listen i + i {
+    animation-delay: 0.8s;
+  }
+  .ob-tag {
+    position: absolute;
+    left: 50%;
+    top: 12.4em;
+    display: grid;
+    transform: translateX(-50%);
+  }
+  .ob-tag > span {
+    grid-area: 1 / 1;
+    justify-self: center;
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0.55em 1em;
+    border-radius: 2em;
+    background: #1c1c1a;
+    box-shadow: inset 0 0 0 1px var(--hair);
+    font-size: 1.15em;
+    color: var(--cyan);
+    white-space: nowrap;
+  }
+  .ob-pulse {
+    width: 0.55em;
+    height: 0.55em;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--green), var(--cyan));
+  }
+  .ob-root[data-play] .ob-pulse {
+    animation: ob-pulse 1.6s ease-out infinite;
+  }
+
+  /* ---------------- Phone ---------------- */
+  .ob-phone {
+    position: absolute;
+    left: 56.43em; /* 63.2em of the frame at this font size: centred */
+    top: 6.79em;
+    width: 30em;
+    height: 63.6em; /* ≈ iPhone 16 proportions */
+    font-size: 1.12em;
+    padding: 0.8em;
+    border-radius: 4.8em;
+    background: #161616;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1), 0 2em 6em rgb(0 0 0 / 0.6);
+  }
+  .ob-screen {
+    position: relative;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 4.1em;
+    background:
+      radial-gradient(130% 32% at 50% 0%, rgb(4 183 65 / 0.24), transparent 75%),
+      #0d0d0d; /* green-tinted top, as in the reference screens */
+  }
+  .ob-statusbar {
+    position: absolute;
+    left: 2.4em;
+    right: 2.4em;
+    top: 1.1em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 1em;
+    font-weight: 600;
+  }
+  .ob-statusbar > span:first-child {
+    font-size: 1.2em;
+  }
+  .ob-statusbar svg {
+    width: 2.8em;
+    fill: var(--fg);
+  }
+  .ob-island {
+    width: 8em;
+    height: 2.3em;
+    border-radius: 2em;
+    background: #000;
+  }
+  .ob-head {
+    position: absolute;
+    left: 1.6em;
+    right: 1.6em;
+    top: 4.6em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .ob-round {
+    display: grid;
+    place-items: center;
+    width: 3em;
+    height: 3em;
+    border-radius: 50%;
+    background: var(--faint);
+  }
+  .ob-round svg,
+  .ob-mic,
+  .ob-voice svg {
+    width: 1.5em;
+    height: 1.5em;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .ob-who {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0.4em 1.1em 0.4em 0.5em;
+    border-radius: 2em;
+    background: var(--faint);
+    font-size: 1.15em;
+    font-weight: 500;
+  }
+  .ob-mini-face {
+    position: relative;
+    display: flex;
+    gap: 0.35em;
+    justify-content: center;
+    align-items: flex-start;
+    width: 2em;
+    height: 2em;
+    padding-top: 0.5em;
+    border-radius: 50%;
+    background: #f5f5f5;
+  }
+  .ob-mini-face i {
+    width: 0.25em;
+    height: 0.55em;
+    border-radius: 1em;
+    background: #0a0a0a;
+    transform: rotate(24deg);
+  }
+
+  .ob-thread {
+    position: absolute;
+    left: 1.6em;
+    right: 1.6em;
+    top: 8.6em;
+    bottom: 6.8em;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    overflow: hidden;
+    mask-image: linear-gradient(to bottom, transparent, #000 4em);
+  }
+  .ob-row {
+    display: grid;
+    grid-template-rows: 1fr;
+  }
+  .ob-clip {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .ob-msg {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8em;
+    padding-top: 1em;
+  }
+  .ob-bot,
+  .ob-user {
+    max-width: 88%;
+    padding: 0.75em 1em;
+    border-radius: 1.4em;
+    font-size: 1.15em;
+    line-height: 1.4;
+  }
+  .ob-bot {
+    align-self: flex-start;
+    background: rgb(255 255 255 / 0.06);
+  }
+  .ob-user {
+    align-self: flex-end;
+    background: #f2f2f2;
+    color: #111;
+  }
+  .ob-voice svg {
+    display: inline-block;
+    margin: 0 0.2em -0.25em 0;
+    width: 1.2em;
+    height: 1.2em;
+  }
+  .ob-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+  }
+  .ob-chips-stack {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .ob-chip {
+    padding: 0.4em 0.85em;
+    border: 1px solid transparent;
+    border-radius: 1em;
+    background: linear-gradient(#171717, #171717) padding-box, linear-gradient(90deg, #57cf80, var(--sky)) border-box;
+    font-size: 1.05em;
+    color: var(--fg);
+  }
+  .ob-chip.is-picked {
+    background: var(--grad) padding-box, var(--grad) border-box;
+    color: #0a0a0a;
+    font-weight: 600;
+  }
+  .ob-working {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    font-size: 1.1em;
+  }
+  .ob-working,
+  .ob-done,
+  .ob-field-listen,
+  .ob-tag > span {
+    background: linear-gradient(90deg, var(--green), var(--cyan)) text;
+    color: transparent;
+  }
+  .ob-dots {
+    display: inline-flex;
+    gap: 0.25em;
+  }
+  .ob-dots i {
+    width: 0.4em;
+    height: 0.4em;
+    border-radius: 50%;
+    background: var(--green);
+  }
+  .ob-dots i:nth-child(2) {
+    background: #2fc6a0;
+  }
+  .ob-dots i:nth-child(3) {
+    background: var(--cyan);
+  }
+  .ob-root[data-play] .ob-dots i {
+    animation: ob-dot 1.2s ease-in-out infinite;
+  }
+  .ob-dots i:nth-child(2) {
+    animation-delay: 0.15s !important;
+  }
+  .ob-dots i:nth-child(3) {
+    animation-delay: 0.3s !important;
+  }
+  .ob-card-msg {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6em;
+    padding: 1.2em 1.3em;
+    border-radius: 1.6em;
+    background: var(--grad);
+    color: #fff;
+  }
+  .ob-glow {
+    background:
+      radial-gradient(90% 80% at 85% 10%, rgb(255 255 255 / 0.28), transparent 60%),
+      linear-gradient(135deg, var(--sky), #2fc6a0 50%, var(--green));
+  }
+  .ob-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    font-size: 1.45em;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .ob-card-text {
+    font-size: 1.05em;
+    color: rgb(255 255 255 / 0.85);
+  }
+  .ob-ticker {
+    padding: 0.1em 0.45em;
+    border-radius: 0.5em;
+    background: #0a0a0a;
+    color: #fff;
+    font-size: 0.75em;
+    font-weight: 700;
+  }
+  .ob-kv {
+    display: flex;
+    justify-content: space-between;
+    font-size: 1.05em;
+    color: rgb(255 255 255 / 0.85);
+  }
+  .ob-kv b {
+    font-weight: 600;
+    color: #fff;
+  }
+  .ob-cta {
+    align-self: flex-start;
+    margin-top: 0.3em;
+    padding: 0.5em 1.2em;
+    border-radius: 2em;
+    background: #fff;
+    color: #110644; /* the reference's navy */
+    font-size: 1.05em;
+    font-weight: 600;
+  }
+  .ob-done {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5em;
+    font-size: 1.1em;
+  }
+  .ob-done svg {
+    width: 1.4em;
+    height: 1.4em;
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .ob-composer {
+    position: absolute;
+    left: 1.6em;
+    right: 1.6em;
+    bottom: 2em;
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+  }
+  .ob-plus {
+    flex: none;
+    width: 3.6em;
+    height: 3.6em;
+  }
+  .ob-field {
+    position: relative;
+    flex: 1;
+    display: grid;
+    height: 3.6em;
+    border-radius: 2em;
+    background: var(--faint);
+  }
+  .ob-field > span {
+    grid-area: 1 / 1;
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0 1.2em;
+    font-size: 1.1em;
+  }
+  .ob-field-idle {
+    justify-content: space-between;
+    padding-right: 0.35em !important;
+    color: var(--muted);
+  }
+  .ob-mic-btn {
+    display: grid;
+    place-items: center;
+    width: 2.6em;
+    height: 2.6em;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #00b64d, var(--cyan));
+    color: #fff;
+  }
+  .ob-mic-btn .ob-mic {
+    width: 1.3em;
+    height: 1.3em;
+  }
+  .ob-field-listen {
+    box-shadow: inset 0 0 0 1px rgb(89 211 253 / 0.35);
+    border-radius: 2em;
+  }
+  .ob-wave {
+    display: flex;
+    align-items: center;
+    gap: 0.18em;
+    height: 1.8em;
+  }
+  .ob-wave i {
+    width: 0.2em;
+    height: 100%;
+    border-radius: 1em;
+    background: var(--c);
+    transform: scaleY(0.3);
+  }
+  .ob-root[data-play] .ob-wave i {
+    animation: ob-wave 0.7s ease-in-out var(--d) infinite alternate;
+  }
+
+  @keyframes ob-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+  @keyframes ob-blink {
+    0%, 92%, 100% {
+      scale: 1 1;
+    }
+    95% {
+      scale: 1 0.1;
+    }
+  }
+  @keyframes ob-pulse {
+    from {
+      box-shadow: 0 0 0 0 rgb(25 193 218 / 0.6);
+    }
+    to {
+      box-shadow: 0 0 0 0.7em rgb(25 193 218 / 0);
+    }
+  }
+  @keyframes ob-bob {
+    0%,
+    100% {
+      translate: 0 0;
+    }
+    50% {
+      translate: 0 -0.8em;
+    }
+  }
+  @keyframes ob-ring {
+    from {
+      opacity: 0.8;
+      scale: 1;
+    }
+    to {
+      opacity: 0;
+      scale: 1.6;
+    }
+  }
+  @keyframes ob-dot {
+    0%, 100% {
+      opacity: 0.3;
+      translate: 0 0;
+    }
+    50% {
+      opacity: 1;
+      translate: 0 -0.25em;
+    }
+  }
+  @keyframes ob-wave {
+    to {
+      transform: scaleY(1);
+    }
+  }
+</style>

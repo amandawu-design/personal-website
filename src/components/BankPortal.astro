@@ -1,0 +1,1841 @@
+---
+// Animated concept for the digital bank case study, in two scenarios that
+// auto-cycle (with tabs to switch and a pause button):
+//   1. Family budget: a parent sets a monthly budget on desktop, then the
+//      child gets a notification on their phone and opens the details.
+//   2. Trading: an order with take profit / stop loss is placed right on the
+//      chart on desktop, then on mobile the take profit fills and the gain is
+//      shared with a friend.
+//
+// Everything inside the frame is sized in em, and 1em = 1/160 of the frame
+// width, so the scene scales like an image. Each scenario runs once per play
+// (--T); timings below are percentages of that. Without JS, or with
+// prefers-reduced-motion, the static state shows each scenario's end screens.
+
+import { createTimeline, type Point } from '../scripts/timeline';
+
+const { n, on, off, between, press, grow, settle, draw, toast, banner, dragLine, path, clicks, taps, css } = createTimeline();
+
+/* ------------------------------------------------------------------ */
+/* Scenario 1: family budget (16s)                                     */
+/* ------------------------------------------------------------------ */
+
+const BUDGET_T = '16s';
+// Slider: $0–$150, dragged from $20 to $80. Track spans desktop x 6 → 63.2em, y 31.3em.
+const TRACK = 57.2;
+const thumbFrom = 6 + (20 / 150) * TRACK;
+const thumbTo = 6 + (80 / 150) * TRACK;
+const budgetCursor: Point[] = [
+  [0, 84, 50],
+  [5, thumbFrom, 31.3],
+  [7.5, thumbFrom, 31.3],
+  [19, thumbTo, 31.3],
+  [24, 8.2, 59],
+  [26, 8.2, 59],
+  [31, 56.2, 59],
+  [33, 56.2, 59],
+  [40, 74, 62],
+  [100, 74, 62],
+];
+const B = {
+  cursor: path('bp-b-cursor', budgetCursor),
+  cursorVis: between(1.5, 45),
+  clicks: clicks('bp-b-clicks', [6.5, 25.5, 32.5]),
+  thumb: settle(7.5, 19, `translateX(${n(thumbFrom - thumbTo)}em)`),
+  fill: grow(7.5, 19, 0.25),
+  amt20: off(11.3),
+  amt40: between(11.3, 15.2),
+  amt60: between(15.2, 19),
+  amt80: on(19),
+  cats: [grow(19.5, 25), grow(20.5, 26), grow(21.5, 27), grow(22.5, 28)],
+  knob: settle(25.5, 27, 'translateX(-2em)'),
+  switchOn: on(26),
+  save: press(32.5),
+  toast: toast(34, 46),
+  banner: banner(50, 58.5),
+  taps: taps('bp-b-taps', [[58, 14.1, 7.8]]),
+  detail: settle(59.5, 63, 'translateY(100%)'),
+  ring: draw(63, 72),
+  mCats: [grow(66, 71), grow(67, 72), grow(68, 73), grow(69, 74)],
+  note: on(73),
+};
+
+const budgetCats = [
+  { name: 'Snacks', amount: 20, color: '#f2b9cf' },
+  { name: 'Games', amount: 25, color: '#b9b6f0' },
+  { name: 'Transport', amount: 20, color: '#f2d38a' },
+  { name: 'Savings', amount: 15, color: '#86dc2a' },
+];
+
+/* ------------------------------------------------------------------ */
+/* Scenario 2: trading (22s)                                           */
+/* ------------------------------------------------------------------ */
+
+const TRADE_T = '22s';
+
+// Candlestick data: seeded random walk, identical every build
+let seed = 11;
+const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const N = 40;
+const LAST = 1142.18;
+const ENTRY = 1120;
+const TP = 1180;
+const SL = 1095;
+const QTY = 10;
+const walk: { open: number; close: number; high: number; low: number; vol: number }[] = [];
+let price = 1000;
+for (let i = 0; i < N; i++) {
+  const open = price;
+  const close = open + (rand() - 0.42) * 20;
+  walk.push({ open, close, high: Math.max(open, close) + rand() * 8, low: Math.min(open, close) - rand() * 8, vol: 0.3 + rand() * 0.7 });
+  price = close;
+}
+const candles = walk.map((c) => ({ ...c, open: c.open + LAST - price, close: c.close + LAST - price, high: c.high + LAST - price, low: c.low + LAST - price }));
+
+// Chart geometry in SVG units; 10 units = 1em, so em positions line up with the HTML overlay.
+const W = 550;
+const TOP = 10;
+const H = 220;
+const VOL_TOP = 250;
+const VOL_H = 60;
+const lo = Math.min(...candles.map((c) => c.low), SL);
+const hi = Math.max(...candles.map((c) => c.high), TP);
+const min = lo - (hi - lo) * 0.08;
+const max = hi + (hi - lo) * 0.08;
+const step = hi - lo > 160 ? 50 : 25;
+const ticks: number[] = [];
+for (let v = Math.ceil(min / step) * step; v <= max; v += step) ticks.push(v);
+const slot = W / N;
+const cx = (i: number) => n(slot * i + slot / 2);
+const cy = (v: number) => n(TOP + ((max - v) / (max - min)) * H);
+const em = (u: number) => n(u / 10);
+const PERIOD = 8;
+const ma = candles.flatMap((_, i) =>
+  i < PERIOD - 1 ? [] : [[cx(i), cy(candles.slice(i - PERIOD + 1, i + 1).reduce((s, c) => s + c.close, 0) / PERIOD)] as const],
+);
+const maPath = 'M' + ma.map(([x, y]) => `${x} ${y}`).join(' L');
+
+// The chart overlay sits at desktop (6em, 25em); Y() is a price level in desktop em.
+const OX = 6;
+const OY = 25;
+const Y = (v: number) => OY + em(cy(v));
+const TP_HANDLE_X = OX + 40 + 2.3; // handle centres (handles sit at 40em and 45.5em, 4.6em wide)
+const SL_HANDLE_X = OX + 45.5 + 2.3;
+const tradeCursor: Point[] = [
+  [0, 86, 58],
+  [5, 40, Y(1150)],
+  [10, 26, Y(1132)],
+  [15, 44, Y(ENTRY)],
+  [17, 44, Y(ENTRY)],
+  [21, TP_HANDLE_X, Y(ENTRY)],
+  [23, TP_HANDLE_X, Y(ENTRY)],
+  [30, TP_HANDLE_X, Y(TP)],
+  [31, TP_HANDLE_X, Y(TP)],
+  [34, SL_HANDLE_X, Y(ENTRY)],
+  [36, SL_HANDLE_X, Y(ENTRY)],
+  [41, SL_HANDLE_X, Y(SL)],
+  [42, SL_HANDLE_X, Y(SL)],
+  [46, 86.1, 59],
+  [48, 86.1, 59],
+  [53, 95, 62],
+  [100, 95, 62],
+];
+const crosshair = tradeCursor.filter(([p]) => p <= 17);
+const profit = (TP - ENTRY) * QTY;
+const loss = (ENTRY - SL) * QTY;
+const money = (v: number) => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const T = {
+  cursor: path('bp-t-cursor', tradeCursor),
+  cursorVis: between(1.5, 54),
+  clicks: clicks('bp-t-clicks', [17, 22.5, 35.5, 47.5]),
+  vline: path('bp-t-vline', crosshair, (x) => `translateX(${n(x - OX)}em)`),
+  hline: path('bp-t-hline', crosshair, (_, y) => `translateY(${n(y - OY)}em)`),
+  crossVis: between(4, 16.8),
+  buy: on(17.3),
+  tpHandle: between(18.5, 22.5),
+  slHandle: between(18.5, 35.5),
+  tpLine: dragLine(22.5, 23, 30, em(cy(ENTRY) - cy(TP))),
+  slLine: dragLine(35.5, 36, 41, em(cy(ENTRY) - cy(SL))),
+  tpSet: on(30.5),
+  slSet: on(41.5),
+  dashEntry: off(17.5),
+  entry: on(17.5),
+  dashTp: off(30.5),
+  dashSl: off(41.5),
+  place: press(47.5),
+  toast: toast(48.5, 60),
+  live: on(50),
+  liveBar: grow(51, 60, 0.35),
+  p1: off(53),
+  p2: between(53, 57),
+  p3: on(57),
+  banner: banner(61, 67.5),
+  detail: settle(68.5, 72, 'translateY(100%)'),
+  chart: draw(72, 78),
+  share: press(79),
+  sheet: settle(80.5, 83.5, 'translateY(100%)'),
+  scrim: on(81),
+  picked: on(87.5),
+  send: press(91),
+  sendLabel: off(92),
+  sentLabel: on(92),
+  taps: taps('bp-t-taps', [
+    [67, 14.1, 7.8],
+    [79, 14.1, 57.8],
+    [87, 4.2, 48.6],
+    [91, 14.1, 57.8],
+  ]),
+};
+
+// Mini chart on the phone: price climbing from entry to take profit
+const mini = [1121, 1118, 1126, 1124, 1133, 1130, 1141, 1146, 1143, 1155, 1161, 1158, 1169, 1175, 1180];
+const miniY = (v: number) => n(8 + ((1186 - v) / (1186 - 1110)) * 84);
+const miniPath = 'M' + mini.map((v, i) => `${n((i / (mini.length - 1)) * 236 + 2)} ${miniY(v)}`).join(' L');
+
+const generatedCss = css();
+
+const scenes = [
+  {
+    key: 'budget',
+    tab: 'Family budget',
+    T: BUDGET_T,
+    label:
+      'Animated concept: on desktop, a parent sets an $80 monthly budget for their child. On the child’s phone, a notification arrives and opens the budget details.',
+  },
+  {
+    key: 'trade',
+    tab: 'Trading',
+    T: TRADE_T,
+    label:
+      'Animated concept: on desktop, an investor places a limit order with take profit and stop loss directly on a candlestick chart. On mobile, the take profit fills and they share the $600 gain with a friend.',
+  },
+];
+
+const a = (name: string) => `--a:${name}`;
+---
+
+<div class="bp-root" data-bank-portal data-scene="budget">
+  <div class="bp" role="img" aria-label={scenes[0].label} data-bp-frame>
+    <div class="bp-stage" aria-hidden="true">
+      <!-- ============================================================ -->
+      <!-- Scenario 1: family budget                                    -->
+      <!-- ============================================================ -->
+      <div class="bp-scene bp-scene-budget" style={`--T:${BUDGET_T}`}>
+        <div class="bp-desktop">
+          <div class="bp-nav">
+            <span class="bp-logo"></span>
+            <span class="bp-link">Home</span>
+            <span class="bp-link">Accounts</span>
+            <span class="bp-link is-active">Family</span>
+            <span class="bp-link">Trade</span>
+            <span class="bp-nav-end">
+              <svg class="bp-icon" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Zm4 4a2 2 0 0 0 4 0" /></svg>
+              <span class="bp-avatar"><span>AW</span></span>
+            </span>
+          </div>
+          <p class="bp-hello">Family budgets</p>
+
+          <div class="bp-card bp-budget-card">
+            <div class="bp-kid">
+              <span class="bp-face bp-face-lg" style="--c:#f3cfdc"><span>M</span></span>
+              <span class="bp-kid-text"><b>Maya</b><span>Age 12 · Prepaid card ••2291</span></span>
+              <span class="bp-pill">October</span>
+            </div>
+
+            <p class="bp-muted bp-budget-label">Monthly budget</p>
+            <p class="bp-budget-amount bp-swap">
+              <span class="bp-a bp-hide" style={a(B.amt20)}>$20</span>
+              <span class="bp-a bp-hide" style={a(B.amt40)}>$40</span>
+              <span class="bp-a bp-hide" style={a(B.amt60)}>$60</span>
+              <span class="bp-a" style={a(B.amt80)}>$80</span>
+            </p>
+
+            <div class="bp-slider">
+              <span class="bp-slider-fill bp-a" style={a(B.fill)}></span>
+              <span class="bp-slider-thumb bp-a" style={a(B.thumb)}></span>
+            </div>
+            <div class="bp-slider-scale"><span>$0</span><span>$150</span></div>
+
+            <div class="bp-cats">
+              {budgetCats.map((c, i) => (
+                <div class="bp-cat">
+                  <span class="bp-dot" style={`--c:${c.color}`}></span>
+                  <span class="bp-cat-name">{c.name}</span>
+                  <span class="bp-cat-bar"><span class="bp-a" style={`${a(B.cats[i])};--c:${c.color};width:${(c.amount / 25) * 100}%`}></span></span>
+                  <span class="bp-cat-amt">${c.amount}</span>
+                </div>
+              ))}
+            </div>
+
+            <div class="bp-budget-actions">
+              <span class="bp-switch">
+                <span class="bp-switch-on bp-a" style={a(B.switchOn)}></span>
+                <span class="bp-switch-knob bp-a" style={a(B.knob)}></span>
+              </span>
+              <span class="bp-switch-label">Notify Maya when it’s ready</span>
+              <span class="bp-btn bp-dark bp-save bp-a" style={a(B.save)}>Save budget</span>
+            </div>
+          </div>
+
+          <div class="bp-card bp-side-card">
+            <p class="bp-card-title">Maya’s goals</p>
+            <div class="bp-goal">
+              <div class="bp-row"><b>New bike</b><span class="bp-muted">$120 of $300</span></div>
+              <span class="bp-progress-track"><span style="width:40%"></span></span>
+            </div>
+            <p class="bp-overline">Rules</p>
+            <div class="bp-row bp-rule"><span>Weekly limit</span><b>$25</b></div>
+            <div class="bp-row bp-rule"><span>Online purchases</span><b>Ask me</b></div>
+            <div class="bp-row bp-rule"><span>Round-ups to savings</span><span class="bp-switch bp-switch-static"><span class="bp-switch-on"></span><span class="bp-switch-knob"></span></span></div>
+            <p class="bp-overline">Recent</p>
+            <div class="bp-row bp-rule"><span>Corner Store</span><b>−$4.50</b></div>
+            <div class="bp-row bp-rule"><span>Allowance</span><b class="bp-pos">+$10.00</b></div>
+          </div>
+
+          <div class="bp-toast bp-a bp-hide" style={a(B.toast)}>
+            <span class="bp-toast-icon"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+            <span class="bp-toast-text"><b>Budget saved</b><span>Maya will get a notification</span></span>
+          </div>
+
+          <div class="bp-cursor bp-a" style={a(B.cursor)}>
+            <div class="bp-a bp-hide" style={a(B.cursorVis)}>
+              <span class="bp-ripple bp-a" style={a(B.clicks)}></span>
+              <svg class="bp-arrow" viewBox="0 0 20 24"><path d="M2 2l15 11.5-6.6.9 3.8 7.3-2.7 1.4-3.8-7.4L2 20.5z" /></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="bp-phone">
+          <div class="bp-screen">
+            <div class="bp-lock">
+              <p class="bp-lock-date">Wednesday, October 1</p>
+              <p class="bp-lock-time">9:41</p>
+            </div>
+
+            <div class="bp-app bp-a" style={a(B.detail)}>
+              <div class="bp-app-head">
+                <svg class="bp-icon" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
+                <p class="bp-app-title">October budget</p>
+              </div>
+              <div class="bp-ring">
+                <svg viewBox="0 0 120 120">
+                  <circle class="bp-ring-track" cx="60" cy="60" r="50" />
+                  <circle class="bp-ring-arc bp-a" style={a(B.ring)} cx="60" cy="60" r="50" pathLength="1" />
+                </svg>
+                <div class="bp-ring-text"><b>$80</b><span>left to spend</span></div>
+              </div>
+              <p class="bp-muted bp-center">30 days left · resets Nov 1</p>
+              <div class="bp-m-cats">
+                {budgetCats.map((c, i) => (
+                  <div class="bp-m-cat">
+                    <div class="bp-row"><span><i class="bp-dot" style={`--c:${c.color}`}></i>{c.name}</span><b>${c.amount}</b></div>
+                    <span class="bp-cat-bar"><span class="bp-a" style={`${a(B.mCats[i])};--c:${c.color};width:${(c.amount / 25) * 100}%`}></span></span>
+                  </div>
+                ))}
+              </div>
+              <div class="bp-note bp-a" style={a(B.note)}>
+                <span class="bp-face" style="--c:#d9cbb0"><span>AW</span></span>
+                <span><b>Note from Mom</b><span>Save some for the movie on Friday!</span></span>
+              </div>
+            </div>
+
+            <div class="bp-banner bp-a bp-hide" style={a(B.banner)}>
+              <span class="bp-app-icon"></span>
+              <span class="bp-banner-text">
+                <span class="bp-row"><b>Your October budget is ready</b><span class="bp-muted">now</span></span>
+                <span>You have $80 to spend this month. Tap to see the details.</span>
+              </span>
+            </div>
+
+            <div class="bp-status"><span class="bp-island"></span></div>
+            <span class="bp-tap bp-a bp-hide" style={a(B.taps)}></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- Scenario 2: trading                                           -->
+      <!-- ============================================================ -->
+      <div class="bp-scene bp-scene-trade" style={`--T:${TRADE_T}`}>
+        <div class="bp-desktop">
+          <div class="bp-nav">
+            <span class="bp-logo"></span>
+            <span class="bp-link">Home</span>
+            <span class="bp-link">Accounts</span>
+            <span class="bp-link">Family</span>
+            <span class="bp-link is-active">Trade</span>
+            <span class="bp-nav-end">
+              <svg class="bp-icon" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Zm4 4a2 2 0 0 0 4 0" /></svg>
+              <span class="bp-avatar"><span>AW</span></span>
+            </span>
+          </div>
+          <p class="bp-hello">Welcome back, Amanda!</p>
+
+          <div class="bp-card bp-chart-card">
+            <div class="bp-chart-head">
+              <div>
+                <p class="bp-sym"><b>NVDA</b><span>NVIDIA Corp · NASDAQ</span></p>
+                <p class="bp-price">${money(LAST)}</p>
+              </div>
+              <div class="bp-tools">
+                <div class="bp-seg"><span>1D</span><span>1W</span><span>1M</span><span class="is-on">3M</span><span>1Y</span></div>
+                <div class="bp-chips">
+                  <span class="bp-chip"><i class="bp-swatch"></i>MA 8</span>
+                  <span class="bp-chip">Volume</span>
+                  <span class="bp-chip">Draw order</span>
+                </div>
+              </div>
+            </div>
+
+            <svg class="bp-svg" viewBox={`0 0 610 ${VOL_TOP + VOL_H + 10}`}>
+              {ticks.map((v) => (
+                <g>
+                  <line class="bp-gridline" x1="0" x2={W} y1={cy(v)} y2={cy(v)} />
+                  <text class="bp-axis" x={W + 8} y={cy(v) + 4}>{v.toLocaleString('en-US')}</text>
+                </g>
+              ))}
+              <line class="bp-gridline" x1="0" x2={W} y1={VOL_TOP - 6} y2={VOL_TOP - 6} />
+              {candles.map((c, i) => (
+                <rect
+                  class:list={['bp-vol', c.close >= c.open ? 'is-up' : 'is-down']}
+                  style={`--i:${i}`}
+                  x={cx(i) - 4}
+                  y={n(VOL_TOP + VOL_H * (1 - c.vol))}
+                  width="8"
+                  height={n(VOL_H * c.vol)}
+                />
+              ))}
+              {candles.map((c, i) => (
+                <g class:list={['bp-candle', c.close >= c.open ? 'is-up' : 'is-down']} style={`--i:${i}`}>
+                  <line x1={cx(i)} x2={cx(i)} y1={cy(c.high)} y2={cy(c.low)} />
+                  <rect x={cx(i) - 4} y={cy(Math.max(c.open, c.close))} width="8" height={Math.max(1.5, n(Math.abs(cy(c.open) - cy(c.close))))} rx="1" />
+                </g>
+              ))}
+              <path class="bp-ma" d={maPath} />
+            </svg>
+
+            <!-- Order lines and crosshair, drawn in em over the chart (1em = 10 chart units) -->
+            <div class="bp-overlay">
+              <div class="bp-level bp-level-last" style={`top:${em(cy(LAST))}em`}><span class="bp-tag">{money(LAST)}</span></div>
+
+              <div class="bp-zone bp-zone-tp bp-a" style={`${a(T.tpSet)};top:${em(cy(TP))}em;height:${em(cy(ENTRY) - cy(TP))}em`}></div>
+              <div class="bp-zone bp-zone-sl bp-a" style={`${a(T.slSet)};top:${em(cy(ENTRY))}em;height:${em(cy(SL) - cy(ENTRY))}em`}></div>
+
+              <div class="bp-level bp-level-buy bp-a" style={`${a(T.buy)};top:${em(cy(ENTRY))}em`}>
+                <span class="bp-label">Buy limit · {QTY}</span>
+                <span class="bp-handle bp-a bp-hide" style={`${a(T.tpHandle)};left:40em`}>+ TP</span>
+                <span class="bp-handle bp-a bp-hide" style={`${a(T.slHandle)};left:45.5em`}>+ SL</span>
+                <span class="bp-tag">{money(ENTRY)}</span>
+              </div>
+              <div class="bp-level bp-level-tp bp-a" style={`${a(T.tpLine)};top:${em(cy(TP))}em`}>
+                <span class="bp-label">Take profit</span>
+                <span class="bp-pnl bp-a" style={a(T.tpSet)}>+${money(profit)}</span>
+                <span class="bp-tag bp-a" style={a(T.tpSet)}>{money(TP)}</span>
+              </div>
+              <div class="bp-level bp-level-sl bp-a" style={`${a(T.slLine)};top:${em(cy(SL))}em`}>
+                <span class="bp-label">Stop loss</span>
+                <span class="bp-pnl bp-a" style={a(T.slSet)}>−${money(loss)}</span>
+                <span class="bp-tag bp-a" style={a(T.slSet)}>{money(SL)}</span>
+              </div>
+
+              <div class="bp-a bp-hide" style={a(T.crossVis)}>
+                <span class="bp-vline bp-a" style={a(T.vline)}></span>
+                <span class="bp-hline bp-a" style={a(T.hline)}></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bp-card bp-order">
+            <p class="bp-card-title">Buy NVDA</p>
+            <div class="bp-toggle"><span class="is-on">Buy</span><span>Sell</span></div>
+            <div class="bp-field"><span class="bp-muted">Order type</span><b>Limit</b></div>
+            <div class="bp-field"><span class="bp-muted">Quantity</span><b>{QTY}</b></div>
+            <div class="bp-field">
+              <span class="bp-muted">Entry</span>
+              <b class="bp-swap"><span class="bp-a bp-hide" style={a(T.dashEntry)}>—</span><span class="bp-a" style={a(T.entry)}>${money(ENTRY)}</span></b>
+            </div>
+            <div class="bp-field">
+              <span class="bp-muted">Take profit</span>
+              <b class="bp-swap"><span class="bp-a bp-hide" style={a(T.dashTp)}>—</span><span class="bp-a" style={a(T.tpSet)}>${money(TP)} <i class="bp-pos">+${profit}</i></span></b>
+            </div>
+            <div class="bp-field">
+              <span class="bp-muted">Stop loss</span>
+              <b class="bp-swap"><span class="bp-a bp-hide" style={a(T.dashSl)}>—</span><span class="bp-a" style={a(T.slSet)}>${money(SL)} <i class="bp-neg">−${loss}</i></span></b>
+            </div>
+            <div class="bp-total">
+              <span class="bp-muted">Risk / reward</span>
+              <b class="bp-swap"><span class="bp-a bp-hide" style={a(T.dashSl)}>—</span><span class="bp-a" style={a(T.slSet)}>1 : {(profit / loss).toFixed(1)}</span></b>
+            </div>
+            <span class="bp-btn bp-dark bp-place bp-a" style={a(T.place)}>Place order</span>
+          </div>
+
+          <div class="bp-toast bp-toast-left bp-a bp-hide" style={a(T.toast)}>
+            <span class="bp-toast-icon"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+            <span class="bp-toast-text"><b>Order placed</b><span>Buy {QTY} NVDA at {money(ENTRY)} with TP and SL</span></span>
+          </div>
+
+          <div class="bp-cursor bp-a" style={a(T.cursor)}>
+            <div class="bp-a bp-hide" style={a(T.cursorVis)}>
+              <span class="bp-ripple bp-a" style={a(T.clicks)}></span>
+              <svg class="bp-arrow" viewBox="0 0 20 24"><path d="M2 2l15 11.5-6.6.9 3.8 7.3-2.7 1.4-3.8-7.4L2 20.5z" /></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="bp-phone">
+          <div class="bp-screen">
+            <div class="bp-lock">
+              <p class="bp-lock-date">Wednesday, October 1</p>
+              <p class="bp-lock-time">9:41</p>
+              <div class="bp-live bp-a" style={a(T.live)}>
+                <div class="bp-row">
+                  <span class="bp-live-sym"><span class="bp-app-icon"></span><b>NVDA</b></span>
+                  <b class="bp-swap bp-live-price">
+                    <span class="bp-a bp-hide" style={a(T.p1)}>$1,151.20</span>
+                    <span class="bp-a bp-hide" style={a(T.p2)}>$1,166.40</span>
+                    <span class="bp-a" style={a(T.p3)}>$1,180.00</span>
+                  </b>
+                </div>
+                <span class="bp-progress-track"><span class="bp-a" style={`${a(T.liveBar)};width:100%`}></span></span>
+                <div class="bp-row bp-muted"><span>Entry {money(ENTRY)}</span><span>Take profit {money(TP)}</span></div>
+              </div>
+            </div>
+
+            <div class="bp-app bp-a" style={a(T.detail)}>
+              <div class="bp-app-head">
+                <svg class="bp-icon" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
+                <p class="bp-app-title">Trade closed</p>
+              </div>
+              <p class="bp-muted">NVDA · {QTY} shares · Take profit</p>
+              <p class="bp-gain">+${money(profit)}</p>
+              <p class="bp-gain-pct">▲ {(((TP - ENTRY) / ENTRY) * 100).toFixed(2)}% in 2 days</p>
+              <svg class="bp-mini" viewBox="0 0 240 100">
+                <line class="bp-mini-tp" x1="0" x2="240" y1={miniY(TP)} y2={miniY(TP)} />
+                <line class="bp-mini-entry" x1="0" x2="240" y1={miniY(ENTRY)} y2={miniY(ENTRY)} />
+                <path class="bp-mini-line bp-a" style={a(T.chart)} d={miniPath} pathLength="1" />
+                <circle class="bp-mini-dot" cx="238" cy={miniY(TP)} r="4" />
+              </svg>
+              <div class="bp-rows">
+                <div class="bp-row"><span class="bp-muted">Bought</span><b>{money(ENTRY)}</b></div>
+                <div class="bp-row"><span class="bp-muted">Sold</span><b>{money(TP)}</b></div>
+                <div class="bp-row"><span class="bp-muted">Total return</span><b class="bp-pos">+${money(profit)}</b></div>
+              </div>
+              <span class="bp-btn bp-lime bp-share bp-a" style={a(T.share)}>Share your win</span>
+            </div>
+
+            <span class="bp-scrim bp-a bp-hide" style={a(T.scrim)}></span>
+            <div class="bp-sheet bp-a" style={a(T.sheet)}>
+              <span class="bp-grabber"></span>
+              <p class="bp-sheet-title">Share your win</p>
+              <div class="bp-brag">
+                <span class="bp-brag-top"><span class="bp-app-icon"></span>NVDA · Take profit</span>
+                <b>+{(((TP - ENTRY) / ENTRY) * 100).toFixed(2)}%</b>
+                <span>+${money(profit)} in 2 days</span>
+              </div>
+              <p class="bp-muted bp-sheet-label">Send to</p>
+              <div class="bp-people">
+                <div class="bp-person">
+                  <span class="bp-face" style="--c:#f3cfdc"><span>PS</span><i class="bp-picked bp-a bp-hide" style={a(T.picked)}></i></span>
+                  <span class="bp-name">Priya</span>
+                </div>
+                <div class="bp-person"><span class="bp-face" style="--c:#d6e8bd"><span>MD</span></span><span class="bp-name">Marcus</span></div>
+                <div class="bp-person"><span class="bp-face" style="--c:#f2e1b6"><span>AL</span></span><span class="bp-name">Alex</span></div>
+                <div class="bp-person"><span class="bp-face" style="--c:#cfd8f2"><span>JK</span></span><span class="bp-name">Jordan</span></div>
+              </div>
+              <span class="bp-btn bp-dark bp-send bp-a" style={a(T.send)}>
+                <span class="bp-swap">
+                  <span class="bp-a" style={a(T.sendLabel)}>Send</span>
+                  <span class="bp-a bp-hide" style={a(T.sentLabel)}>Sent to Priya ✓</span>
+                </span>
+              </span>
+            </div>
+
+            <div class="bp-banner bp-a bp-hide" style={a(T.banner)}>
+              <span class="bp-app-icon"></span>
+              <span class="bp-banner-text">
+                <span class="bp-row"><b>Take profit hit</b><span class="bp-muted">now</span></span>
+                <span>Sold {QTY} NVDA at ${money(TP)}. You made +${money(profit)}.</span>
+              </span>
+            </div>
+
+            <div class="bp-status"><span class="bp-island"></span></div>
+            <span class="bp-tap bp-a bp-hide" style={a(T.taps)}></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Two dashes: pick a scenario; pressing the current one pauses / resumes -->
+  <div class="mt-3 flex justify-center" role="group" aria-label="Animation scenarios">
+    {
+      scenes.map((s, i) => (
+        <button
+          type="button"
+          class="bp-tab group grid h-6 w-8 place-items-center rounded-sm"
+          aria-current={i === 0 ? 'true' : 'false'}
+          aria-label={`Show ${s.tab.toLowerCase()} scenario`}
+          data-scene-btn={s.key}
+          data-name={s.tab.toLowerCase()}
+          data-label={s.label}
+          style={`--T:${s.T}`}
+        >
+          <span class="bp-dash relative block h-[3px] w-6 overflow-hidden rounded-full bg-ink/15 transition-colors group-hover:bg-ink/30">
+            <span class="bp-progress" aria-hidden="true"></span>
+          </span>
+        </button>
+      ))
+    }
+  </div>
+</div>
+
+<style is:inline set:html={generatedCss}></style>
+
+<script>
+  import { initScenarios } from '../scripts/scenarios';
+
+  document.querySelectorAll<HTMLElement>('[data-bank-portal]').forEach((root) => {
+    initScenarios(root, root.querySelector<HTMLElement>('[data-bp-frame]')!, 'bp-progress');
+  });
+</script>
+
+<style>
+  .bp {
+    --ink: #271d03;
+    --text: #2d2b25;
+    --muted: #8b887d;
+    --line: #ecebe5;
+    --app: #f5f5f3;
+    --card: #ffffff;
+    --lime: #86dc2a;
+    --lime-soft: #e6f5d2;
+    --olive: #3a3221;
+    --up: #6cc21f;
+    --down: #df5b45;
+
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 8.64;
+    overflow: hidden;
+    border-radius: 0.375rem;
+    background: #dedfd5;
+    container-type: inline-size;
+  }
+  .bp-stage {
+    position: absolute;
+    inset: 0;
+    font-size: calc(100cqw / 160); /* 1em = 1/160 of the frame width */
+    font-family: var(--font-sans);
+    line-height: 1.3;
+    color: var(--text);
+  }
+  .bp p {
+    margin: 0;
+  }
+  .bp b {
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .bp i {
+    font-style: normal;
+  }
+
+  /* Scenes: only the active one is shown */
+  .bp-scene {
+    position: absolute;
+    inset: 0;
+  }
+  .bp-root:not([data-scene='budget']) .bp-scene-budget,
+  .bp-root:not([data-scene='trade']) .bp-scene-trade {
+    display: none;
+  }
+
+  /* Generic timeline animation: each element names its keyframes in --a */
+  .bp-hide {
+    opacity: 0;
+  }
+  .bp-root[data-play] .bp-a {
+    animation-name: var(--a);
+    animation-duration: var(--T);
+    animation-timing-function: ease-in-out;
+    animation-fill-mode: both;
+  }
+  .bp-root[data-play] .bp-scene {
+    animation: bp-scene-in 0.5s ease both;
+  }
+  .bp-root[data-paused] *,
+  .bp-root[data-paused] *::after {
+    animation-play-state: paused !important;
+  }
+
+  /* Dash fill doubles as the scenario timer (see script) */
+  .bp-progress {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--color-ink) 55%, transparent);
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  .bp-tab[aria-current='true'] .bp-progress {
+    transform: scaleX(1);
+  }
+  .bp-root[data-play] .bp-tab[aria-current='true'] .bp-progress {
+    animation: bp-progress var(--T) linear both;
+  }
+
+  /* ---------------- Shared UI ---------------- */
+  .bp-icon {
+    width: 1.9em;
+    height: 1.9em;
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .bp-muted {
+    color: var(--muted);
+  }
+  .bp-pos {
+    color: #4f9a12 !important;
+  }
+  .bp-neg {
+    color: var(--down) !important;
+  }
+  .bp-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+  }
+  .bp-swap {
+    display: inline-grid;
+    justify-items: end;
+  }
+  .bp-swap > span {
+    grid-area: 1 / 1;
+  }
+  .bp-btn {
+    display: block;
+    border-radius: 2em;
+    text-align: center;
+    font-weight: 600;
+  }
+  .bp-dark {
+    background: var(--olive);
+    color: #fff;
+  }
+  .bp-lime {
+    background: var(--lime);
+    color: var(--ink);
+  }
+  .bp-face {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 4.4em;
+    height: 4.4em;
+    border-radius: 50%;
+    background: var(--c);
+  }
+  .bp-face > span {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .bp-dot {
+    display: inline-block;
+    flex: none;
+    width: 0.9em;
+    height: 0.9em;
+    margin-right: 0.6em;
+    border-radius: 50%;
+    background: var(--c);
+  }
+  .bp-progress-track {
+    display: block;
+    height: 0.7em;
+    overflow: hidden;
+    border-radius: 1em;
+    background: #eeede7;
+  }
+  .bp-progress-track > span {
+    display: block;
+    height: 100%;
+    border-radius: 1em;
+    background: var(--lime);
+    transform-origin: left;
+  }
+  .bp-app-icon {
+    display: inline-block;
+    flex: none;
+    width: 3.2em;
+    height: 3.2em;
+    border-radius: 0.9em;
+    background: radial-gradient(circle at 50% 50%, var(--lime) 0 32%, var(--olive) 33%);
+  }
+
+  /* ---------------- Desktop ---------------- */
+  .bp-desktop {
+    position: absolute;
+    left: 12.5em;
+    top: 10.2em; /* vertically centred in the 86.4em-tall frame */
+    width: 104em;
+    height: 66em; /* same height as every desktop window in the case studies */
+    overflow: hidden;
+    border-radius: 2.2em;
+    background: var(--app);
+    box-shadow: 0 2em 5em rgb(60 60 40 / 0.12), 0 0.2em 0.6em rgb(60 60 40 / 0.08);
+  }
+  .bp-nav {
+    position: absolute;
+    left: 3.6em;
+    right: 3.6em;
+    top: 2.8em;
+    display: flex;
+    align-items: center;
+    gap: 3em;
+    height: 3.6em;
+  }
+  .bp-logo {
+    width: 2.8em;
+    height: 2.8em;
+    margin-right: 0.6em;
+    border-radius: 50%;
+    background: var(--lime);
+  }
+  .bp-link {
+    position: relative;
+    font-size: 1.3em;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .bp-link.is-active {
+    color: var(--ink);
+  }
+  .bp-link.is-active::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -0.6em;
+    height: 0.16em;
+    border-radius: 1em;
+    background: var(--lime);
+  }
+  .bp-nav-end {
+    display: flex;
+    align-items: center;
+    gap: 1.8em;
+    margin-left: auto;
+  }
+  .bp-avatar {
+    display: grid;
+    place-items: center;
+    width: 3.2em;
+    height: 3.2em;
+    border-radius: 50%;
+    background: #d9cbb0;
+  }
+  .bp-avatar span {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .bp-hello {
+    position: absolute;
+    left: 1.125em; /* 3.6em at this font size */
+    top: 2.7em;
+    font-family: var(--font-serif);
+    font-size: 3.2em;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .bp-card {
+    position: absolute;
+    top: 14em;
+    height: 49.2em;
+    padding: 2.4em;
+    border-radius: 1.6em;
+    background: var(--card);
+  }
+  .bp-card-title {
+    font-family: var(--font-serif);
+    font-size: 2.2em;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .bp-pill {
+    padding: 0.35em 0.9em;
+    border: 1px solid var(--line);
+    border-radius: 2em;
+    font-size: 1.1em;
+    font-weight: 500;
+  }
+  .bp-toast {
+    position: absolute;
+    right: 3.6em;
+    bottom: 3em;
+    display: flex;
+    align-items: center;
+    gap: 1.1em;
+    padding: 1.2em 1.8em 1.2em 1.3em;
+    border-radius: 1.4em;
+    background: #fff;
+    box-shadow: 0 1.2em 3em rgb(40 40 20 / 0.16);
+  }
+  .bp-toast-left {
+    right: auto;
+    left: 6em; /* over the chart's volume bars, clear of the order button */
+  }
+  .bp-toast-icon {
+    display: grid;
+    place-items: center;
+    width: 2.8em;
+    height: 2.8em;
+    border-radius: 50%;
+    background: var(--lime);
+  }
+  .bp-toast-icon svg {
+    width: 1.5em;
+    height: 1.5em;
+    fill: none;
+    stroke: var(--olive);
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .bp-toast-text {
+    display: flex;
+    flex-direction: column;
+  }
+  .bp-toast-text b {
+    font-size: 1.3em;
+  }
+  .bp-toast-text span {
+    font-size: 1.1em;
+    color: var(--muted);
+  }
+
+  /* Mouse cursor: positioned by its tip */
+  .bp-cursor {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 5;
+  }
+  .bp-arrow {
+    position: relative;
+    display: block;
+    width: 2.4em;
+    height: 2.9em;
+    margin: -0.2em 0 0 -0.2em;
+    fill: #fff;
+    stroke: var(--ink);
+    stroke-width: 1.4;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0.2em 0.3em rgb(0 0 0 / 0.2));
+  }
+  .bp-ripple {
+    position: absolute;
+    left: -2em;
+    top: -2em;
+    width: 4em;
+    height: 4em;
+    border-radius: 50%;
+    background: var(--lime);
+    opacity: 0;
+  }
+
+  /* Budget: main card */
+  .bp-budget-card {
+    left: 3.6em;
+    width: 62em;
+  }
+  .bp-kid {
+    display: flex;
+    align-items: center;
+    gap: 1.2em;
+  }
+  .bp-face-lg {
+    width: 4.6em;
+    height: 4.6em;
+  }
+  .bp-kid-text {
+    display: flex;
+    flex-direction: column;
+    margin-right: auto;
+  }
+  .bp-kid-text b {
+    font-size: 1.6em;
+  }
+  .bp-kid-text span {
+    font-size: 1.15em;
+    color: var(--muted);
+  }
+  .bp-budget-label {
+    position: absolute;
+    left: 2em;
+    top: 7.3em;
+    font-size: 1.2em;
+  }
+  .bp-budget-amount {
+    position: absolute;
+    left: 0.55em;
+    top: 2.35em;
+    justify-items: start;
+    font-family: var(--font-serif);
+    font-size: 4.4em;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .bp-slider {
+    position: absolute;
+    left: 2.4em;
+    right: 2.4em;
+    top: 17em;
+    height: 0.6em;
+    border-radius: 1em;
+    background: #eeede7;
+  }
+  .bp-slider-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 53.33%;
+    border-radius: 1em;
+    background: var(--lime);
+    transform-origin: left;
+  }
+  .bp-slider-thumb {
+    position: absolute;
+    left: calc(53.33% - 1.3em);
+    top: -1em;
+    width: 2.6em;
+    height: 2.6em;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0.2em 0.6em rgb(0 0 0 / 0.2), 0 0 0 0.35em var(--lime-soft);
+  }
+  .bp-slider-scale {
+    position: absolute;
+    left: 2.4em;
+    right: 2.4em;
+    top: 19.4em;
+    display: flex;
+    justify-content: space-between;
+    font-size: 1em;
+    color: var(--muted);
+  }
+  .bp-cats {
+    position: absolute;
+    left: 2.4em;
+    right: 2.4em;
+    top: 23em;
+  }
+  .bp-cat {
+    display: grid;
+    grid-template-columns: auto 10em 1fr 4em;
+    align-items: center;
+    height: 3.6em;
+    border-bottom: 1px solid var(--line);
+  }
+  .bp-cat-name {
+    font-size: 1.25em;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .bp-cat-bar {
+    display: block;
+    height: 0.7em;
+    overflow: hidden;
+    border-radius: 1em;
+    background: #f1f0eb;
+  }
+  .bp-cat-bar > span {
+    display: block;
+    height: 100%;
+    border-radius: 1em;
+    background: var(--c);
+    transform-origin: left;
+  }
+  .bp-cat-amt {
+    text-align: right;
+    font-size: 1.25em;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .bp-budget-actions {
+    position: absolute;
+    left: 2.4em;
+    right: 2.4em;
+    top: 43.2em;
+    display: flex;
+    align-items: center;
+    gap: 1.2em;
+    height: 3.6em;
+  }
+  .bp-switch {
+    position: relative;
+    flex: none;
+    width: 4.4em;
+    height: 2.4em;
+    border-radius: 2em;
+    background: #dcdad2;
+  }
+  .bp-switch-on {
+    position: absolute;
+    inset: 0;
+    border-radius: 2em;
+    background: var(--lime);
+  }
+  .bp-switch-knob {
+    position: absolute;
+    top: 0.25em;
+    left: 2.25em;
+    width: 1.9em;
+    height: 1.9em;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0.1em 0.3em rgb(0 0 0 / 0.2);
+  }
+  .bp-switch-label {
+    font-size: 1.25em;
+    margin-right: auto;
+  }
+  .bp-save {
+    width: 11.2em; /* 14em at this font size */
+    padding: 0.75em 0;
+    font-size: 1.25em;
+  }
+
+  /* Budget: side card */
+  .bp-side-card {
+    left: 67.8em;
+    width: 32.6em;
+  }
+  .bp-goal {
+    margin: 1.6em 0 0.4em;
+  }
+  .bp-goal .bp-row {
+    margin-bottom: 0.7em;
+    font-size: 1.25em;
+  }
+  .bp-overline {
+    margin-top: 2em !important;
+    padding-bottom: 0.4em;
+    font-size: 1em;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .bp-rule {
+    height: 3.4em;
+    border-bottom: 1px solid var(--line);
+    font-size: 1.2em;
+  }
+  .bp-rule > * {
+    font-size: inherit;
+  }
+  .bp-switch-static {
+    font-size: 0.83em;
+  }
+
+  /* Trade: chart card */
+  .bp-chart-card {
+    left: 3.6em;
+    width: 66em;
+  }
+  .bp-chart-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .bp-sym {
+    font-size: 1.3em;
+  }
+  .bp-sym span {
+    margin-left: 0.5em;
+    color: var(--muted);
+  }
+  .bp-price {
+    margin-top: 0.1em !important;
+    font-family: var(--font-serif);
+    font-size: 3.4em;
+    font-weight: 500;
+    line-height: 1.1;
+    color: var(--ink);
+  }
+  .bp-tools {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1em;
+  }
+  .bp-seg {
+    display: flex;
+    padding: 0.3em;
+    border-radius: 1em;
+    background: #f1f1ee;
+  }
+  .bp-seg span {
+    padding: 0.35em 0.8em;
+    border-radius: 0.7em;
+    font-size: 1.1em;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .bp-seg .is-on {
+    background: #fff;
+    color: var(--ink);
+    box-shadow: 0 0.1em 0.3em rgb(0 0 0 / 0.08);
+  }
+  .bp-chips {
+    display: flex;
+    gap: 0.6em;
+  }
+  .bp-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    padding: 0.3em 0.8em;
+    border: 1px solid var(--line);
+    border-radius: 2em;
+    font-size: 1.05em;
+  }
+  .bp-swatch {
+    display: inline-block;
+    width: 0.9em;
+    height: 0.22em;
+    border-radius: 1em;
+    background: var(--olive);
+  }
+  .bp-svg {
+    position: absolute;
+    left: 2.4em;
+    top: 11em;
+    width: 61em;
+  }
+  .bp-gridline {
+    stroke: var(--line);
+    stroke-width: 1;
+  }
+  .bp-axis {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    fill: var(--muted);
+  }
+  .bp-candle line {
+    stroke-width: 1.2;
+  }
+  .bp-candle.is-up line {
+    stroke: var(--up);
+  }
+  .bp-candle.is-up rect {
+    fill: var(--up);
+  }
+  .bp-candle.is-down line {
+    stroke: var(--down);
+  }
+  .bp-candle.is-down rect {
+    fill: var(--down);
+  }
+  .bp-vol {
+    opacity: 0.25;
+  }
+  .bp-vol.is-up {
+    fill: var(--up);
+  }
+  .bp-vol.is-down {
+    fill: var(--down);
+  }
+  .bp-ma {
+    fill: none;
+    stroke: var(--olive);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+    opacity: 0.8;
+  }
+  .bp-root[data-play] .bp-candle,
+  .bp-root[data-play] .bp-vol {
+    transform-box: fill-box;
+    transform-origin: center bottom;
+    animation: bp-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--i) * 25ms) both;
+  }
+
+  /* Order lines over the chart (overlay origin = plot origin; 55em wide plot, tags to the right) */
+  .bp-overlay {
+    position: absolute;
+    left: 2.4em;
+    top: 11em;
+    width: 55em;
+    height: 31em;
+  }
+  .bp-level {
+    position: absolute;
+    left: 0;
+    width: 55em;
+    height: 0;
+    border-top: 0.15em dashed var(--c);
+  }
+  .bp-level-last {
+    --c: #b8b5aa;
+  }
+  .bp-level-buy {
+    --c: var(--olive);
+    z-index: 2;
+  }
+  .bp-level-tp {
+    --c: #4f9a12;
+  }
+  .bp-level-sl {
+    --c: var(--down);
+  }
+  .bp-level > span {
+    position: absolute;
+    top: 0;
+    transform: translateY(-50%);
+    white-space: nowrap;
+  }
+  .bp-label {
+    left: 1em;
+    padding: 0.25em 0.7em;
+    border-radius: 0.5em;
+    background: var(--c);
+    color: #fff;
+    font-size: 1em;
+    font-weight: 600;
+  }
+  .bp-pnl {
+    left: 12em;
+    padding: 0.2em 0.6em;
+    border-radius: 0.5em;
+    background: #fff;
+    border: 1px solid var(--c);
+    color: var(--c);
+    font-size: 1em;
+    font-weight: 600;
+  }
+  .bp-tag {
+    left: 55em;
+    padding: 0.25em 0.5em;
+    border-radius: 0.4em;
+    background: var(--c);
+    color: #fff;
+    font-size: 0.95em;
+    font-weight: 600;
+  }
+  .bp-level-last .bp-tag {
+    color: var(--ink);
+  }
+  .bp-handle {
+    width: 4.6em;
+    padding: 0.25em 0;
+    border: 1px solid var(--olive);
+    border-radius: 0.5em;
+    background: #fff;
+    text-align: center;
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--olive);
+  }
+  .bp-zone {
+    position: absolute;
+    left: 0;
+    width: 55em;
+  }
+  .bp-zone-tp {
+    background: rgb(108 194 31 / 0.1);
+  }
+  .bp-zone-sl {
+    background: rgb(223 91 69 / 0.1);
+  }
+  .bp-vline,
+  .bp-hline {
+    position: absolute;
+    left: 0;
+    top: 0;
+    border: 0 dashed var(--olive);
+    opacity: 0.55;
+  }
+  .bp-vline {
+    height: 31em;
+    border-left-width: 0.12em;
+  }
+  .bp-hline {
+    width: 55em;
+    border-top-width: 0.12em;
+  }
+
+  /* Trade: order ticket */
+  .bp-order {
+    left: 71.8em;
+    width: 28.6em;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1em;
+  }
+  .bp-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 0.35em;
+    border-radius: 1.2em;
+    background: #f1f1ee;
+  }
+  .bp-toggle span {
+    padding: 0.45em 0;
+    border-radius: 0.8em;
+    text-align: center;
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .bp-toggle .is-on {
+    background: var(--olive);
+    color: #fff;
+  }
+  .bp-field,
+  .bp-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 1.15em;
+  }
+  .bp-field {
+    padding: 0.75em 0.9em;
+    border: 1px solid var(--line);
+    border-radius: 0.9em;
+  }
+  .bp-total {
+    padding-top: 0.9em;
+    border-top: 1px solid var(--line);
+  }
+  .bp-field i,
+  .bp-total i {
+    margin-left: 0.3em;
+    font-size: 0.9em;
+  }
+  .bp-place {
+    margin-top: auto;
+    padding: 0.8em;
+    font-size: 1.3em;
+  }
+
+  /* ---------------- Phone ---------------- */
+  .bp-phone {
+    position: absolute;
+    left: 101.34em; /* 113.5em of the frame at this font size */
+    top: 6.79em;
+    width: 30em;
+    height: 63.6em; /* ≈ iPhone 16 proportions */
+    font-size: 1.12em;
+    padding: 0.9em;
+    border-radius: 4.8em;
+    background: #1d1b16;
+    box-shadow: 0 2.4em 5em rgb(40 40 20 / 0.25);
+  }
+  .bp-screen {
+    position: relative;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 4em;
+    background: var(--app);
+  }
+  .bp-status {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 1em;
+    z-index: 6;
+    display: flex;
+    justify-content: center;
+  }
+  .bp-island {
+    width: 8em;
+    height: 2.3em;
+    border-radius: 2em;
+    background: #1d1b16;
+  }
+  .bp-tap {
+    position: absolute;
+    left: -2em;
+    top: -2em;
+    z-index: 7;
+    width: 4em;
+    height: 4em;
+    border-radius: 50%;
+    background: rgb(39 29 3 / 0.35);
+    box-shadow: 0 0 0 0.3em rgb(255 255 255 / 0.6);
+  }
+
+  /* Lock screen */
+  .bp-lock {
+    position: absolute;
+    inset: 0;
+    padding: 9em 2em 0;
+    text-align: center;
+    background:
+      radial-gradient(circle at 20% 85%, rgb(134 220 42 / 0.35), transparent 45%),
+      radial-gradient(circle at 85% 30%, rgb(185 182 240 / 0.45), transparent 50%),
+      linear-gradient(180deg, #eef0e4, #dfe2d2);
+  }
+  .bp-lock-date {
+    font-size: 1.3em;
+    font-weight: 500;
+    color: var(--olive);
+  }
+  .bp-lock-time {
+    font-size: 7em;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .bp-live {
+    margin-top: 18em;
+    padding: 1.4em 1.6em;
+    border-radius: 2em;
+    background: rgb(255 255 255 / 0.85);
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9em;
+  }
+  .bp-live-sym {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    font-size: 1.2em;
+  }
+  .bp-live-sym .bp-app-icon {
+    width: 2em;
+    height: 2em;
+    border-radius: 0.6em;
+  }
+  .bp-live-price {
+    font-size: 1.4em;
+  }
+  .bp-live > .bp-row.bp-muted {
+    font-size: 0.95em;
+  }
+
+  /* Notification banner */
+  .bp-banner {
+    position: absolute;
+    left: 1.2em;
+    right: 1.2em;
+    top: 4.4em;
+    z-index: 5;
+    display: flex;
+    gap: 1em;
+    padding: 1.2em;
+    border-radius: 2em;
+    background: rgb(255 255 255 / 0.95);
+    box-shadow: 0 1em 2.4em rgb(40 40 20 / 0.18);
+  }
+  .bp-banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2em;
+    font-size: 1.05em;
+    line-height: 1.3;
+  }
+  .bp-banner-text b {
+    font-size: 1.05em;
+  }
+
+  /* App screens (open over the lock screen) */
+  .bp-app {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+    padding: 4.6em 2em 2em;
+    background: var(--app);
+  }
+  .bp-app-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    margin-left: -0.4em;
+  }
+  .bp-app-title {
+    font-family: var(--font-serif);
+    font-size: 2.3em;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .bp-center {
+    text-align: center;
+    font-size: 1.1em;
+  }
+  .bp-ring {
+    position: relative;
+    width: 15em;
+    height: 15em;
+    margin: 0.6em auto 0;
+  }
+  .bp-ring svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+  .bp-ring circle {
+    fill: none;
+    stroke-width: 11;
+  }
+  .bp-ring-track {
+    stroke: #eeede7;
+  }
+  .bp-ring-arc {
+    stroke: var(--lime);
+    stroke-linecap: round;
+    stroke-dasharray: 1;
+  }
+  .bp-ring-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .bp-ring-text b {
+    font-family: var(--font-serif);
+    font-size: 3.6em;
+    font-weight: 500;
+    line-height: 1;
+  }
+  .bp-ring-text span {
+    font-size: 1em;
+    color: var(--muted);
+  }
+  .bp-m-cats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9em;
+    padding: 1.3em 1.4em;
+    border-radius: 1.6em;
+    background: #fff;
+  }
+  .bp-m-cat .bp-row {
+    margin-bottom: 0.4em;
+    font-size: 1.1em;
+  }
+  .bp-m-cat .bp-row > span {
+    display: flex;
+    align-items: center;
+  }
+  .bp-m-cat .bp-cat-bar {
+    height: 0.55em;
+  }
+  .bp-note {
+    display: flex;
+    align-items: center;
+    gap: 1em;
+    padding: 1.1em 1.3em;
+    border-radius: 1.6em;
+    background: var(--lime-soft);
+  }
+  .bp-note .bp-face {
+    width: 3.4em;
+    height: 3.4em;
+  }
+  .bp-note .bp-face > span {
+    font-size: 1em;
+  }
+  .bp-note > span:last-child {
+    display: flex;
+    flex-direction: column;
+    font-size: 1.05em;
+  }
+
+  /* Trade result screen */
+  .bp-app > .bp-muted {
+    font-size: 1.1em;
+  }
+  .bp-gain {
+    margin-top: -0.2em !important;
+    font-family: var(--font-serif);
+    font-size: 5em;
+    font-weight: 500;
+    line-height: 1;
+    color: #3f7d0e;
+  }
+  .bp-gain-pct {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: #4f9a12;
+  }
+  .bp-mini {
+    width: 100%;
+    height: auto;
+    margin: 0.4em 0;
+    overflow: visible;
+  }
+  .bp-mini-tp,
+  .bp-mini-entry {
+    stroke-dasharray: 4 4;
+    stroke-width: 1.2;
+  }
+  .bp-mini-tp {
+    stroke: #4f9a12;
+  }
+  .bp-mini-entry {
+    stroke: #b8b5aa;
+  }
+  .bp-mini-line {
+    fill: none;
+    stroke: var(--olive);
+    stroke-width: 2.4;
+    stroke-linejoin: round;
+    stroke-dasharray: 1;
+  }
+  .bp-mini-dot {
+    fill: var(--lime);
+    stroke: var(--olive);
+    stroke-width: 2;
+  }
+  .bp-rows {
+    display: flex;
+    flex-direction: column;
+    padding: 0.4em 1.4em;
+    border-radius: 1.6em;
+    background: #fff;
+  }
+  .bp-rows .bp-row {
+    height: 3.1em;
+    font-size: 1.15em;
+    border-bottom: 1px solid var(--line);
+  }
+  .bp-rows .bp-row:last-child {
+    border-bottom: 0;
+  }
+  .bp-share,
+  .bp-send {
+    margin-top: auto;
+    padding: 0.8em;
+    font-size: 1.35em;
+  }
+
+  /* Share sheet */
+  .bp-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    background: rgb(29 27 22 / 0.35);
+  }
+  .bp-sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+    height: 36em;
+    padding: 1em 2em 2em;
+    border-radius: 2.6em 2.6em 0 0;
+    background: var(--app);
+    transform: translateY(100%);
+  }
+  .bp-grabber {
+    align-self: center;
+    width: 4em;
+    height: 0.45em;
+    border-radius: 1em;
+    background: #cfccc2;
+  }
+  .bp-sheet-title {
+    font-family: var(--font-serif);
+    font-size: 2em;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .bp-brag {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2em;
+    padding: 1.4em 1.6em;
+    border-radius: 1.8em;
+    background: linear-gradient(135deg, #b7ea7c, var(--lime));
+  }
+  .bp-brag-top {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    font-size: 1.05em;
+    font-weight: 600;
+    color: var(--olive);
+  }
+  .bp-brag-top .bp-app-icon {
+    width: 1.8em;
+    height: 1.8em;
+    border-radius: 0.5em;
+  }
+  .bp-brag b {
+    font-family: var(--font-serif);
+    font-size: 4.4em;
+    font-weight: 500;
+    line-height: 1.05;
+  }
+  .bp-brag > span:last-child {
+    font-size: 1.1em;
+    font-weight: 500;
+    color: var(--olive);
+  }
+  .bp-sheet-label {
+    font-size: 1.05em;
+  }
+  .bp-people {
+    display: flex;
+    justify-content: space-between;
+  }
+  .bp-person {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5em;
+  }
+  .bp-name {
+    font-size: 1em;
+  }
+  .bp-picked {
+    position: absolute;
+    inset: -0.45em;
+    border: 0.25em solid var(--lime);
+    border-radius: 50%;
+  }
+  .bp-send .bp-swap {
+    justify-items: center;
+  }
+
+  @keyframes bp-scene-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes bp-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+  @keyframes bp-rise {
+    from {
+      transform: scaleY(0);
+      opacity: 0;
+    }
+  }
+</style>
