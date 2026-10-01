@@ -18,10 +18,13 @@ const { title = 'Amanda Wu — Product Design Leader', description = 'I help amb
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <script is:inline>
-      // Apply the saved / system theme before paint to avoid a flash.
+      // Load in the browser's colour scheme, applied before paint to avoid a flash.
+      // The nav toggle only switches the current view; it isn't remembered.
       (function () {
-        var saved = localStorage.getItem('theme');
-        var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        try {
+          localStorage.removeItem('theme'); // choice saved by earlier versions of the toggle
+        } catch (e) {}
+        var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         document.documentElement.classList.toggle('dark', dark);
       })();
     </script>

@@ -247,6 +247,7 @@ const RATE_Y = PANEL.y + BUILDER.y + 23.4;
 const rateX = { 0.08: TRACK_X + 6, 0.1: TRACK_X + 19.6, 0.12: TRACK_X + 33.2 } as Record<number, number>; // 12em pills, 1.6em gaps
 const REQ = [PANEL.x + 119.4 - 8.5, PANEL.y + 5.8] as const; // "Request" button in the page header
 const SIMULATE = [126, 56.9] as const; // "Simulate funding" button centre on the dashboard
+const DONE = [72, 61.8] as const; // "Done" button in the confirmation modal
 const capCursor: Point[] = [
   [0, 100, 62],
   [14, SIMULATE[0], SIMULATE[1]],
@@ -266,8 +267,12 @@ const capCursor: Point[] = [
   [56, thumbX(25000), TRACK_Y],
   [61, REQ[0], REQ[1]],
   [63, REQ[0], REQ[1]],
-  [69, 128, 62],
-  [100, 128, 62],
+  [69, 104, 68],
+  [83, 104, 68],
+  [87.5, DONE[0], DONE[1]],
+  [90, DONE[0], DONE[1]],
+  [95, 112, 70],
+  [100, 112, 70],
 ];
 const thumbOffset = (a: number) => `translateX(${n(thumbX(a) - thumbX(final.amount))}em)`;
 const fillScale = (a: number) => `scaleX(${n((a - MIN) / (final.amount - MIN))})`;
@@ -282,8 +287,8 @@ const stateWindows: [number, number][] = [
 const windowAnim = ([a, b]: [number, number]) => (a === 0 ? off(b) : b === 100 ? on(a) : between(a, b));
 const C = {
   cursor: path('pc-b-cursor', capCursor),
-  cursorVis: between(1, 70),
-  clicks: clicks('pc-b-clicks', [16, 40, 45, 62]),
+  cursorVis: between(1, 96),
+  clicks: clicks('pc-b-clicks', [16, 40, 45, 62, 89]),
   sales: draw(1, 8),
   salesArea: on(6),
   // the insight opens between the rows; the bottom row slides down to make room
@@ -305,7 +310,14 @@ const C = {
   rate12: between(40, 45),
   rate8: on(45),
   request: press(62),
-  toast: toast(63, 94),
+  // "Request" opens a confirmation modal over the page; "Done" closes it
+  scrim: kf('pc-b-scrim', '0%,62.5%{opacity:0}64.5%,90%{opacity:1}92%,100%{opacity:0}'),
+  modal: kf(
+    'pc-b-modal',
+    '0%,63%{opacity:0;transform:translate(-50%,-46%) scale(.96)}65.5%,90%{opacity:1;transform:translate(-50%,-50%)}92%,100%{opacity:0;transform:translate(-50%,-48%) scale(.98)}',
+  ),
+  modalOk: kf('pc-b-modal-ok', '0%,65%{opacity:0;transform:scale(.4)}67.5%{opacity:1;transform:scale(1.08)}69.5%,100%{opacity:1;transform:none}'),
+  done: press(89),
 };
 // thumb + fill follow the drags (offsets relative to the final $25K spot)
 const transforms = (name: string, frames: [number, string][]) => kf(name, frames.map(([p, t]) => `${p}%{transform:${t}}`).join(''));
@@ -781,9 +793,19 @@ const generatedCss = css();
             </div>
           </div>
 
-          <div class="pc-toast pc-a pc-hide" style={a(C.toast)}>
-            <span class="pc-toast-icon"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
-            <span class="pc-toast-text"><b>Request sent · {money(final.amount, 0)} at {final.rate * 100}%</b><span>Funds typically arrive in 1–2 business days</span></span>
+          <div class="pc-scrim pc-a pc-hide" style={a(C.scrim)}></div>
+          <div class="pc-modal pc-a pc-hide" style={a(C.modal)} role="presentation">
+            <span class="pc-modal-ok pc-a" style={a(C.modalOk)}><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+            <b class="pc-modal-title">Request sent</b>
+            <p class="pc-modal-sub">{money(final.amount, 0)} is on its way to Osteria Maya</p>
+            <div class="pc-modal-rows">
+              <div><span>Advance</span><b>{money(final.amount, 0)}</b></div>
+              <div><span>Fee</span><b>{money(final.amount * final.rate, 0)} · {Math.round(final.rate * 100)}%</b></div>
+              <div><span>Total to repay</span><b>{money(final.repay, 0)}</b></div>
+              <div><span>Daily remit</span><b>12% of sales</b></div>
+              <div><span>Funds arrive</span><b>In 1–2 business days</b></div>
+            </div>
+            <span class="pc-btn pc-dark pc-modal-done pc-a" style={a(C.done)}>Done</span>
           </div>
 
           <div class="pc-cursor pc-a" style={a(C.cursor)}>
@@ -841,6 +863,34 @@ const generatedCss = css();
     --green: #1f9d55;
     --lav: #a594f9;
     --lav-soft: #efebff;
+    --surface: #fff;
+    --raised: #fff;
+    --subtle: #f1efec;
+    --subtle-2: #efedea;
+    --track: #eeebe7;
+    --hover: #f6f5f3;
+    --rule: #cfcac5;
+    --rule-soft: #e5e1dc;
+    --rule-mid: #d9d4ce;
+    --ref: #b8b2ab;
+    --ref-2: #c9c3bd;
+    --chrome: #191513; /* admin sidebars stay dark in both themes */
+    --on-ink: #fff;
+    --violet-ink: #5b45d6;
+    --lav-mid: #d9d1ff;
+    --insight-line: #ddd4ff;
+    --insight-a: #f6f3ff;
+    --insight-b: #ebe5ff;
+    --warn-bg: #fff4dc;
+    --warn-fg: #9a6200;
+    --green-bg: #e3f5ea;
+    --sent-bg: #e9f7ef;
+    --sent-fg: #1a7f4b;
+    --tip-bg: #fff1f0;
+    --free-ring: rgb(25 21 19 / 0.15);
+    --floor-dot: rgb(25 21 19 / 0.08);
+    --scrim: rgb(25 21 19 / 0.5);
+    --frame: #191513;
 
     position: relative;
     width: 100%;
@@ -850,8 +900,51 @@ const generatedCss = css();
     background:
       radial-gradient(55% 75% at 88% 92%, rgb(165 148 249 / 0.55), transparent 70%),
       radial-gradient(40% 50% at 10% 0%, rgb(165 148 249 / 0.12), transparent 70%),
-      #191513;
+      var(--frame);
     container-type: inline-size;
+  }
+  /* Light site: dark interfaces on a light frame (the default above is the dark site's light UI on a dark frame) */
+  :global(html:not(.dark)) .pc {
+    --ink: #f3f0ec;
+    --text: #e2ddd8;
+    --muted: #9a938d;
+    --line: #34302c;
+    --bg: #151311;
+    --green: #3ccf7e;
+    --lav-soft: #2a2540;
+    --surface: #201d1a;
+    --raised: #3a3531;
+    --subtle: #2c2825;
+    --subtle-2: #2c2825;
+    --track: #2c2825;
+    --hover: #2a2623;
+    --rule: #4a4540;
+    --rule-soft: #3a3632;
+    --rule-mid: #45403b;
+    --ref: #6b655f;
+    --ref-2: #57524d;
+    --chrome: #0d0b0a;
+    --on-ink: #191513;
+    --violet-ink: #b3a6ff;
+    --lav-mid: #3d3566;
+    --insight-line: #3a3360;
+    --insight-a: #24203a;
+    --insight-b: #2c2648;
+    --warn-bg: #3a2e14;
+    --warn-fg: #f5b340;
+    --green-bg: #163323;
+    --sent-bg: #163323;
+    --sent-fg: #5fd896;
+    --tip-bg: #3a1c1a;
+    --free-ring: rgb(255 255 255 / 0.14);
+    --floor-dot: rgb(255 255 255 / 0.07);
+    --scrim: rgb(0 0 0 / 0.55);
+    --frame: #ecebf0;
+  }
+  :global(html:not(.dark)) .pc-terminal {
+    --t-ink: #f3f0ec;
+    --t-muted: #9a938d;
+    --t-screen: #1a1715;
   }
   .pc-stage {
     position: absolute;
@@ -968,7 +1061,7 @@ const generatedCss = css();
     align-items: center;
     gap: 2.2em;
     padding-top: 1.8em;
-    background: var(--ink);
+    background: var(--chrome);
   }
   .pc-side i {
     width: 2.6em;
@@ -998,7 +1091,7 @@ const generatedCss = css();
     gap: 1em;
     padding: 0 3em;
     border-bottom: 1px solid var(--line);
-    background: #fff;
+    background: var(--surface);
   }
   .pc-title {
     margin-right: 1.2em !important;
@@ -1018,7 +1111,7 @@ const generatedCss = css();
   .pc-chip.is-on {
     border-color: var(--ink);
     background: var(--ink);
-    color: #fff;
+    color: var(--on-ink);
   }
   .pc-top-end {
     display: flex;
@@ -1052,7 +1145,7 @@ const generatedCss = css();
   }
   .pc-dark {
     background: var(--ink);
-    color: #fff;
+    color: var(--on-ink);
   }
   .pc-outline {
     border: 1px solid var(--ink);
@@ -1072,7 +1165,7 @@ const generatedCss = css();
     height: 2.9em;
     margin: -0.2em 0 0 -0.2em;
     fill: #fff;
-    stroke: var(--ink);
+    stroke: #191513;
     stroke-width: 1.4;
     stroke-linejoin: round;
     filter: drop-shadow(0 0.2em 0.3em rgb(0 0 0 / 0.25));
@@ -1097,7 +1190,7 @@ const generatedCss = css();
     gap: 1.1em;
     padding: 1.2em 1.8em 1.2em 1.3em;
     border-radius: 1.4em;
-    background: #fff;
+    background: var(--surface);
     box-shadow: 0 1.2em 3em rgb(25 21 19 / 0.22);
   }
   .pc-scene-pay .pc-toast {
@@ -1143,7 +1236,7 @@ const generatedCss = css();
     width: 56em;
     bottom: 0;
     background:
-      radial-gradient(circle, rgb(25 21 19 / 0.08) 0.12em, transparent 0.13em) 0 0 / 2.4em 2.4em,
+      radial-gradient(circle, var(--floor-dot) 0.12em, transparent 0.13em) 0 0 / 2.4em 2.4em,
       var(--bg);
   }
   .pc-table {
@@ -1156,7 +1249,7 @@ const generatedCss = css();
     align-items: center;
     gap: 0.3em;
     border-radius: 1.6em;
-    background: #fff;
+    background: var(--surface);
     box-shadow: 0 0.2em 0.6em rgb(25 21 19 / 0.08);
     text-align: center;
   }
@@ -1172,7 +1265,7 @@ const generatedCss = css();
   }
   .pc-table.is-free {
     background: transparent;
-    box-shadow: inset 0 0 0 0.15em rgb(25 21 19 / 0.15);
+    box-shadow: inset 0 0 0 0.15em var(--free-ring);
   }
   .pc-table.is-free::before {
     display: none;
@@ -1226,7 +1319,7 @@ const generatedCss = css();
     bottom: 0;
     padding: 2.4em;
     border-left: 1px solid var(--line);
-    background: #fff;
+    background: var(--surface);
   }
   .pc-empty {
     position: absolute;
@@ -1417,7 +1510,7 @@ const generatedCss = css();
     grid-template-columns: repeat(3, 1fr);
     place-items: center;
     border-radius: 1.2em;
-    background: #efedea;
+    background: var(--subtle-2);
   }
   .pc-seg > span:not(.pc-seg-on) {
     position: relative;
@@ -1432,7 +1525,7 @@ const generatedCss = css();
     width: calc(33.33% - 0.6em);
     margin-left: 0.3em;
     border-radius: 0.9em;
-    background: #fff;
+    background: var(--raised);
     box-shadow: 0 0.1em 0.4em rgb(0 0 0 / 0.12);
   }
   .pc-sub {
@@ -1446,7 +1539,7 @@ const generatedCss = css();
     justify-content: space-between;
     align-items: center;
     padding: 0.7em 0;
-    border-bottom: 1px solid #ebe8e4;
+    border-bottom: 1px solid var(--line);
     font-size: 1.15em;
   }
   .pc-split-bar {
@@ -1455,7 +1548,7 @@ const generatedCss = css();
     margin: 0.6em 0 0.8em;
     overflow: hidden;
     border-radius: 1em;
-    background: #d9d1ff;
+    background: var(--lav-mid);
   }
   .pc-split-bar span {
     background: var(--t-accent);
@@ -1476,9 +1569,9 @@ const generatedCss = css();
     place-items: center;
     width: 1.9em;
     height: 1.9em;
-    border: 0.15em solid #cfcac5;
+    border: 0.15em solid var(--rule);
     border-radius: 0.5em;
-    background: #fff;
+    background: var(--surface);
   }
   .pc-tick {
     position: absolute;
@@ -1526,9 +1619,9 @@ const generatedCss = css();
     align-items: center;
     justify-content: center;
     height: 6em;
-    border: 1px solid #e5e1dc;
+    border: 1px solid var(--rule-soft);
     border-radius: 1.2em;
-    background: #fff;
+    background: var(--surface);
   }
   .pc-tipbox > b {
     position: relative;
@@ -1544,7 +1637,7 @@ const generatedCss = css();
     inset: -1px;
     border: 0.25em solid var(--t-accent);
     border-radius: 1.2em;
-    background: #fff1f0;
+    background: var(--tip-bg);
   }
   .pc-tiptotal {
     position: absolute;
@@ -1571,7 +1664,7 @@ const generatedCss = css();
     height: 8.4em;
     margin-bottom: 1.2em;
     border-radius: 50%;
-    background: #efedea;
+    background: var(--subtle-2);
   }
   .pc-nfc {
     width: 4.6em;
@@ -1628,9 +1721,9 @@ const generatedCss = css();
     display: grid;
     place-items: center;
     height: 3.4em;
-    border: 1px solid #d9d4ce;
+    border: 1px solid var(--rule-mid);
     border-radius: 2em;
-    background: #fff;
+    background: var(--surface);
     font-size: 1.05em;
     font-weight: 600;
   }
@@ -1646,8 +1739,8 @@ const generatedCss = css();
     top: 39em;
     padding: 1em;
     border-radius: 0.9em;
-    background: #e9f7ef;
-    color: #1a7f4b;
+    background: var(--sent-bg);
+    color: var(--sent-fg);
     font-size: 1.1em;
     font-weight: 600;
     text-align: center;
@@ -1707,7 +1800,7 @@ const generatedCss = css();
 
   /* ---------------- Scenario 2: capital (layout after Shopify's new admin, in the POS brand colours) ---------------- */
   .pc-desktop-cap {
-    background: var(--ink); /* the dark frame around the white main panel */
+    background: var(--chrome); /* the dark frame around the white main panel */
   }
   .pc-admin-side {
     position: absolute;
@@ -1809,7 +1902,7 @@ const generatedCss = css();
   }
   .pc-nav-badge.is-new {
     background: var(--lav);
-    color: var(--ink);
+    color: #191513;
     font-weight: 700;
   }
   .pc-nav-label {
@@ -1828,7 +1921,7 @@ const generatedCss = css();
     bottom: 0.8em;
     overflow: hidden;
     border-radius: 1.4em;
-    background: #fff;
+    background: var(--surface);
   }
   /* two stacked pages in main-panel em: the dashboard, then the Capital page */
   .pc-dash,
@@ -1880,7 +1973,7 @@ const generatedCss = css();
     padding: 0.5em 1.1em;
     border-radius: 0.8em;
     background: var(--ink);
-    color: #fff;
+    color: var(--on-ink);
     font-size: 1.05em;
     font-weight: 600;
   }
@@ -1907,11 +2000,11 @@ const generatedCss = css();
     border-radius: 0.9em;
   }
   .pc-metric.is-on {
-    background: #f6f5f3;
+    background: var(--hover);
   }
   .pc-metric-label {
     align-self: flex-start;
-    border-bottom: 1px dashed #cfcac5;
+    border-bottom: 1px dashed var(--rule);
     font-size: 1.05em;
     font-weight: 600;
     color: var(--muted);
@@ -1948,7 +2041,7 @@ const generatedCss = css();
     padding: 2.2em;
     border: 1px solid var(--line);
     border-radius: 1.2em;
-    background: #fff;
+    background: var(--surface);
   }
   .pc-sales,
   .pc-cash {
@@ -1972,8 +2065,8 @@ const generatedCss = css();
     grid-template-columns: 1fr 36em 16em;
     align-items: center;
     gap: 2.4em;
-    border-color: #ddd4ff;
-    background: linear-gradient(135deg, #f6f3ff, #ebe5ff);
+    border-color: var(--insight-line);
+    background: linear-gradient(135deg, var(--insight-a), var(--insight-b));
   }
   .pc-rowd {
     position: absolute;
@@ -2019,7 +2112,7 @@ const generatedCss = css();
     height: 0.6em;
     overflow: hidden;
     border-radius: 1em;
-    background: #f1efec;
+    background: var(--subtle);
   }
   .pc-ti-bar i {
     display: block;
@@ -2043,8 +2136,8 @@ const generatedCss = css();
   .pc-pill-warn {
     padding: 0.2em 0.7em;
     border-radius: 2em;
-    background: #fff4dc;
-    color: #9a6200;
+    background: var(--warn-bg);
+    color: var(--warn-fg);
     font-size: 0.95em;
     font-weight: 700;
   }
@@ -2099,13 +2192,13 @@ const generatedCss = css();
     stroke-width: 1;
   }
   .pc-event {
-    stroke: #b8b2ab;
+    stroke: var(--ref);
     stroke-width: 1;
     stroke-dasharray: 3 4;
   }
   .pc-prev-line {
     fill: none;
-    stroke: #c9c3bd;
+    stroke: var(--ref-2);
     stroke-width: 2;
     stroke-dasharray: 6 5;
   }
@@ -2118,7 +2211,7 @@ const generatedCss = css();
   }
   .pc-dot-red {
     fill: var(--red);
-    stroke: #fff;
+    stroke: var(--surface);
     stroke-width: 2;
   }
   .pc-ai-head {
@@ -2145,10 +2238,10 @@ const generatedCss = css();
   .pc-ai-tag {
     padding: 0.2em 0.7em;
     border-radius: 2em;
-    background: #fff;
+    background: var(--surface);
     font-size: 0.95em;
     font-weight: 700;
-    color: #5b45d6;
+    color: var(--violet-ink);
   }
   .pc-insight-title {
     margin: 0.6em 0 0 !important;
@@ -2224,7 +2317,7 @@ const generatedCss = css();
   .pc-pill-green {
     padding: 0.3em 0.8em;
     border-radius: 2em;
-    background: #e3f5ea;
+    background: var(--green-bg);
     color: var(--green);
     font-size: 0.95em;
     font-weight: 700;
@@ -2243,7 +2336,7 @@ const generatedCss = css();
     overflow: hidden;
     background:
       radial-gradient(60% 90% at 100% 0%, rgb(165 148 249 / 0.22), transparent 70%),
-      #fff;
+      var(--surface);
   }
   .pc-builder-label {
     position: absolute;
@@ -2270,7 +2363,7 @@ const generatedCss = css();
     padding: 0.5em 1em;
     border-radius: 2em;
     background: var(--lav-soft);
-    color: #5b45d6;
+    color: var(--violet-ink);
     font-size: 1.05em;
     font-weight: 700;
   }
@@ -2286,7 +2379,7 @@ const generatedCss = css();
     top: 14.4em;
     height: 0.6em;
     border-radius: 1em;
-    background: #eeebe7;
+    background: var(--track);
   }
   .pc-track-fill {
     position: absolute;
@@ -2347,7 +2440,7 @@ const generatedCss = css();
     height: 3.6em;
     border: 1px solid var(--line);
     border-radius: 0.9em;
-    background: #fff;
+    background: var(--surface);
   }
   .pc-rate > b {
     position: relative;
@@ -2388,7 +2481,7 @@ const generatedCss = css();
     transform-origin: 60px 60px;
   }
   .pc-ring-track {
-    stroke: #f1efec;
+    stroke: var(--subtle);
   }
   .pc-ring-adv {
     stroke: var(--red);
@@ -2465,7 +2558,7 @@ const generatedCss = css();
     height: 1em;
     overflow: hidden;
     border-radius: 1em;
-    background: repeating-linear-gradient(90deg, #f1efec 0 calc(12.5% - 0.15em), #fff calc(12.5% - 0.15em) 12.5%);
+    background: repeating-linear-gradient(90deg, var(--subtle) 0 calc(12.5% - 0.15em), var(--surface) calc(12.5% - 0.15em) 12.5%);
   }
   .pc-tl-fill {
     position: absolute;
@@ -2530,12 +2623,12 @@ const generatedCss = css();
     fill: rgb(165 148 249 / 0.14);
   }
   .pc-holiday-label {
-    fill: #5b45d6;
+    fill: var(--violet-ink);
     font-weight: 700;
   }
   .pc-base-line {
     fill: none;
-    stroke: #b8b2ab;
+    stroke: var(--ref);
     stroke-width: 2;
     stroke-dasharray: 7 6;
   }
@@ -2565,13 +2658,81 @@ const generatedCss = css();
     background: var(--green);
   }
   .pc-lg-dash {
-    background: repeating-linear-gradient(90deg, #b8b2ab 0 0.4em, transparent 0.4em 0.7em);
+    background: repeating-linear-gradient(90deg, var(--ref) 0 0.4em, transparent 0.4em 0.7em);
   }
-  .pc-scene-capital .pc-toast {
-    top: auto;
-    right: auto;
-    left: 22em;
-    bottom: 3em;
+  /* Confirmation modal over the Capital page */
+  .pc-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    background: var(--scrim);
+  }
+  .pc-modal {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 50em;
+    padding: 4em 4.4em 3.6em;
+    border-radius: 2.4em;
+    background: var(--surface);
+    box-shadow: 0 2.4em 6em rgb(0 0 0 / 0.35), 0 0 0 1px var(--line);
+    text-align: center;
+    transform: translate(-50%, -50%);
+  }
+  .pc-modal-ok {
+    display: grid;
+    place-items: center;
+    width: 6.4em;
+    height: 6.4em;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 1.2em var(--green-bg);
+  }
+  .pc-modal-ok svg {
+    width: 3.4em;
+    height: 3.4em;
+    fill: none;
+    stroke: #fff;
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .pc-modal-title {
+    margin-top: 1.4em;
+    font-size: 2.6em;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .pc-modal-sub {
+    margin-top: 0.5em !important;
+    font-size: 1.4em;
+    color: var(--muted);
+  }
+  .pc-modal-rows {
+    align-self: stretch;
+    margin-top: 2.6em;
+    border-top: 1px solid var(--line);
+    text-align: left;
+  }
+  .pc-modal-rows > div {
+    display: flex;
+    justify-content: space-between;
+    padding: 1em 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 1.3em;
+  }
+  .pc-modal-rows span {
+    color: var(--muted);
+  }
+  .pc-modal-done {
+    align-self: stretch;
+    height: 3.6em;
+    margin-top: 2.6em;
+    font-size: 1.4em;
   }
 
   @keyframes pc-scene-in {
