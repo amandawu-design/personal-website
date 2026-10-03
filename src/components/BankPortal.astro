@@ -11,31 +11,46 @@
 // width, so the scene scales like an image. Each scenario runs once per play
 // (--T); timings below are percentages of that. Without JS, or with
 // prefers-reduced-motion, the static state shows each scenario's end screens.
+//
+// The desktop starts centred on its own; the phone only rises in when its
+// first notification arrives, and the desktop slides left to make room.
 
 import { createTimeline, type Point } from '../scripts/timeline';
 
-const { n, on, off, between, press, grow, settle, draw, toast, banner, dragLine, path, clicks, taps, css } = createTimeline();
+const { n, kf, on, off, between, press, grow, settle, draw, toast, banner, dragLine, path, clicks, taps, css } = createTimeline();
+
+// Desktop layout, in desktop em: content starts at X0, the panels under the page title at CT
+const X0 = 3.6;
+const CT = 17;
+// Phone rises in from below the frame between a and b while the desktop slides from the centre to the left
+const DESK_SHIFT = 15.5; // (160 - 104) / 2 - 12.5
+const enter = (a: number, b: number) => ({
+  desk: settle(a, b, `translateX(${DESK_SHIFT}em)`),
+  phone: kf(`bp-phone-in-${String(a).replace('.', 'x')}`, `0%,${a}%{transform:translateY(80em)}${b}%,100%{transform:none}`),
+});
 
 /* ------------------------------------------------------------------ */
 /* Scenario 1: family budget (16s)                                     */
 /* ------------------------------------------------------------------ */
 
 const BUDGET_T = '16s';
-// Slider: $0–$150, dragged from $20 to $80. Track spans desktop x 6 → 63.2em, y 31.3em.
-const TRACK = 57.2;
-const thumbFrom = 6 + (20 / 150) * TRACK;
-const thumbTo = 6 + (80 / 150) * TRACK;
+// Slider: $0–$150, dragged from $20 to $80. The track spans the 59em main column at CT + 20em.
+const TRACK = 59;
+const SLIDER_Y = CT + 20.3;
+const thumbFrom = X0 + (20 / 150) * TRACK;
+const thumbTo = X0 + (80 / 150) * TRACK;
+const ACTIONS_Y = CT + 52.8; // switch and Save button centres (3.6em row at 51em)
 const budgetCursor: Point[] = [
-  [0, 84, 50],
-  [5, thumbFrom, 31.3],
-  [7.5, thumbFrom, 31.3],
-  [19, thumbTo, 31.3],
-  [24, 8.2, 59],
-  [26, 8.2, 59],
-  [31, 56.2, 59],
-  [33, 56.2, 59],
-  [40, 74, 62],
-  [100, 74, 62],
+  [0, 84, 54],
+  [5, thumbFrom, SLIDER_Y],
+  [7.5, thumbFrom, SLIDER_Y],
+  [19, thumbTo, SLIDER_Y],
+  [24, X0 + 2.2, ACTIONS_Y],
+  [26, X0 + 2.2, ACTIONS_Y],
+  [31, X0 + TRACK - 7, ACTIONS_Y],
+  [33, X0 + TRACK - 7, ACTIONS_Y],
+  [40, 78, 72],
+  [100, 78, 72],
 ];
 const B = {
   cursor: path('bp-b-cursor', budgetCursor),
@@ -52,7 +67,8 @@ const B = {
   switchOn: on(26),
   save: press(32.5),
   toast: toast(34, 46),
-  banner: banner(50, 58.5),
+  ...enter(46.5, 50),
+  banner: banner(51, 58.5),
   taps: taps('bp-b-taps', [[58, 14.1, 7.8]]),
   detail: settle(59.5, 63, 'translateY(100%)'),
   ring: draw(63, 72),
@@ -95,9 +111,9 @@ const candles = walk.map((c) => ({ ...c, open: c.open + LAST - price, close: c.c
 // Chart geometry in SVG units; 10 units = 1em, so em positions line up with the HTML overlay.
 const W = 550;
 const TOP = 10;
-const H = 220;
-const VOL_TOP = 250;
-const VOL_H = 60;
+const H = 260;
+const VOL_TOP = 290;
+const VOL_H = 56;
 const lo = Math.min(...candles.map((c) => c.low), SL);
 const hi = Math.max(...candles.map((c) => c.high), TP);
 const min = lo - (hi - lo) * 0.08;
@@ -115,18 +131,21 @@ const ma = candles.flatMap((_, i) =>
 );
 const maPath = 'M' + ma.map(([x, y]) => `${x} ${y}`).join(' L');
 
-// The chart overlay sits at desktop (6em, 25em); Y() is a price level in desktop em.
-const OX = 6;
-const OY = 25;
+// The chart overlay sits at desktop (X0, CT + 12em); Y() is a price level in desktop em.
+const OX = X0;
+const OY = CT + 12;
 const Y = (v: number) => OY + em(cy(v));
 const TP_HANDLE_X = OX + 40 + 2.3; // handle centres (handles sit at 40em and 45.5em, 4.6em wide)
 const SL_HANDLE_X = OX + 45.5 + 2.3;
+// Place order button centre (order ticket content is 29.8em wide at 70.6em)
+const PLACE_X = 70.6 + 29.8 / 2;
+const PLACE_Y = CT + 36.75;
 const tradeCursor: Point[] = [
-  [0, 86, 58],
-  [5, 40, Y(1150)],
-  [10, 26, Y(1132)],
-  [15, 44, Y(ENTRY)],
-  [17, 44, Y(ENTRY)],
+  [0, 86, 60],
+  [5, OX + 34, Y(1150)],
+  [10, OX + 20, Y(1132)],
+  [15, OX + 38, Y(ENTRY)],
+  [17, OX + 38, Y(ENTRY)],
   [21, TP_HANDLE_X, Y(ENTRY)],
   [23, TP_HANDLE_X, Y(ENTRY)],
   [30, TP_HANDLE_X, Y(TP)],
@@ -135,15 +154,23 @@ const tradeCursor: Point[] = [
   [36, SL_HANDLE_X, Y(ENTRY)],
   [41, SL_HANDLE_X, Y(SL)],
   [42, SL_HANDLE_X, Y(SL)],
-  [46, 86.1, 59],
-  [48, 86.1, 59],
-  [53, 95, 62],
-  [100, 95, 62],
+  [46, PLACE_X, PLACE_Y],
+  [48, PLACE_X, PLACE_Y],
+  [53, 95, 72],
+  [100, 95, 72],
 ];
 const crosshair = tradeCursor.filter(([p]) => p <= 17);
 const profit = (TP - ENTRY) * QTY;
 const loss = (ENTRY - SL) * QTY;
 const money = (v: number) => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const today = candles[N - 1];
+const dayChange = 18.42; // the walk's last candle can close red; the header always shows an up day
+const marketDetails = [
+  ['Open', money(today.open)],
+  ['Day high', money(Math.max(today.high, LAST))],
+  ['Day low', money(today.low)],
+  ['Volume', '38.6M'],
+];
 
 const T = {
   cursor: path('bp-t-cursor', tradeCursor),
@@ -165,11 +192,12 @@ const T = {
   dashSl: off(41.5),
   place: press(47.5),
   toast: toast(48.5, 60),
-  live: on(50),
-  liveBar: grow(51, 60, 0.35),
-  p1: off(53),
-  p2: between(53, 57),
-  p3: on(57),
+  ...enter(48.5, 52),
+  live: on(52.5),
+  liveBar: grow(53, 60, 0.35),
+  p1: off(55),
+  p2: between(55, 57.5),
+  p3: on(57.5),
   banner: banner(61, 67.5),
   detail: settle(68.5, 72, 'translateY(100%)'),
   chart: draw(72, 78),
@@ -222,15 +250,18 @@ const a = (name: string) => `--a:${name}`;
       <!-- Scenario 1: family budget                                    -->
       <!-- ============================================================ -->
       <div class="bp-scene bp-scene-budget" style={`--T:${BUDGET_T}`}>
-        <div class="bp-desktop">
+        <div class="bp-desktop bp-a" style={a(B.desk)}>
           <div class="bp-nav">
-            <span class="bp-logo"></span>
-            <span class="bp-link">Home</span>
-            <span class="bp-link">Accounts</span>
-            <span class="bp-link is-active">Family</span>
-            <span class="bp-link">Trade</span>
+            <span class="bp-brand"><span class="bp-logo"></span>QuestBank</span>
+            <span class="bp-links">
+              <span class="bp-link">Home</span>
+              <span class="bp-link">Accounts</span>
+              <span class="bp-link is-active">Family</span>
+              <span class="bp-link">Trade</span>
+            </span>
             <span class="bp-nav-end">
-              <svg class="bp-icon" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Zm4 4a2 2 0 0 0 4 0" /></svg>
+              <span class="bp-search"><svg class="bp-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>Search</span>
+              <span class="bp-icon-btn"><svg class="bp-icon" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Zm4 4a2 2 0 0 0 4 0" /></svg></span>
               <span class="bp-avatar"><span>AW</span></span>
             </span>
           </div>
@@ -257,6 +288,7 @@ const a = (name: string) => `--a:${name}`;
             </div>
             <div class="bp-slider-scale"><span>$0</span><span>$150</span></div>
 
+            <div class="bp-row bp-cats-head"><span class="bp-overline">Categories</span><span class="bp-muted">4 of 4 set</span></div>
             <div class="bp-cats">
               {budgetCats.map((c, i) => (
                 <div class="bp-cat">
@@ -285,12 +317,13 @@ const a = (name: string) => `--a:${name}`;
               <span class="bp-progress-track"><span style="width:40%"></span></span>
             </div>
             <p class="bp-overline">Rules</p>
-            <div class="bp-row bp-rule"><span>Weekly limit</span><b>$25</b></div>
-            <div class="bp-row bp-rule"><span>Online purchases</span><b>Ask me</b></div>
+            <div class="bp-row bp-rule"><span>Weekly limit</span><b>$25<svg class="bp-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" /></svg></b></div>
+            <div class="bp-row bp-rule"><span>Online purchases</span><b>Ask me<svg class="bp-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" /></svg></b></div>
             <div class="bp-row bp-rule"><span>Round-ups to savings</span><span class="bp-switch bp-switch-static"><span class="bp-switch-on"></span><span class="bp-switch-knob"></span></span></div>
-            <p class="bp-overline">Recent</p>
-            <div class="bp-row bp-rule"><span>Corner Store</span><b>−$4.50</b></div>
-            <div class="bp-row bp-rule"><span>Allowance</span><b class="bp-pos">+$10.00</b></div>
+            <p class="bp-overline">Recent activity</p>
+            <div class="bp-row bp-rule"><span class="bp-txn"><b>Corner Store</b><span>Snacks · Today</span></span><b>−$4.50</b></div>
+            <div class="bp-row bp-rule"><span class="bp-txn"><b>Allowance</b><span>From Mom · Sep 29</span></span><b class="bp-pos">+$10.00</b></div>
+            <div class="bp-row bp-rule"><span class="bp-txn"><b>Transit pass</b><span>Transport · Sep 26</span></span><b>−$6.25</b></div>
           </div>
 
           <div class="bp-toast bp-a bp-hide" style={a(B.toast)}>
@@ -306,7 +339,7 @@ const a = (name: string) => `--a:${name}`;
           </div>
         </div>
 
-        <div class="bp-phone">
+        <div class="bp-phone bp-a" style={a(B.phone)}>
           <div class="bp-screen">
             <div class="bp-lock">
               <p class="bp-lock-date">Wednesday, October 1</p>
@@ -343,12 +376,14 @@ const a = (name: string) => `--a:${name}`;
             <div class="bp-banner bp-a bp-hide" style={a(B.banner)}>
               <span class="bp-app-icon"></span>
               <span class="bp-banner-text">
-                <span class="bp-row"><b>Your October budget is ready</b><span class="bp-muted">now</span></span>
+                <span class="bp-row bp-banner-app"><span>QuestBank</span><span>now</span></span>
+                <b>Your October budget is ready</b>
                 <span>You have $80 to spend this month. Tap to see the details.</span>
               </span>
             </div>
 
             <div class="bp-status"><span class="bp-island"></span></div>
+            <span class="bp-home"></span>
             <span class="bp-tap bp-a bp-hide" style={a(B.taps)}></span>
           </div>
         </div>
@@ -358,15 +393,18 @@ const a = (name: string) => `--a:${name}`;
       <!-- Scenario 2: trading                                           -->
       <!-- ============================================================ -->
       <div class="bp-scene bp-scene-trade" style={`--T:${TRADE_T}`}>
-        <div class="bp-desktop">
+        <div class="bp-desktop bp-a" style={a(T.desk)}>
           <div class="bp-nav">
-            <span class="bp-logo"></span>
-            <span class="bp-link">Home</span>
-            <span class="bp-link">Accounts</span>
-            <span class="bp-link">Family</span>
-            <span class="bp-link is-active">Trade</span>
+            <span class="bp-brand"><span class="bp-logo"></span>QuestBank</span>
+            <span class="bp-links">
+              <span class="bp-link">Home</span>
+              <span class="bp-link">Accounts</span>
+              <span class="bp-link">Family</span>
+              <span class="bp-link is-active">Trade</span>
+            </span>
             <span class="bp-nav-end">
-              <svg class="bp-icon" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Zm4 4a2 2 0 0 0 4 0" /></svg>
+              <span class="bp-search"><svg class="bp-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>Search</span>
+              <span class="bp-icon-btn"><svg class="bp-icon" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Zm4 4a2 2 0 0 0 4 0" /></svg></span>
               <span class="bp-avatar"><span>AW</span></span>
             </span>
           </div>
@@ -375,16 +413,14 @@ const a = (name: string) => `--a:${name}`;
           <div class="bp-card bp-chart-card">
             <div class="bp-chart-head">
               <div>
-                <p class="bp-sym"><b>NVDA</b><span>NVIDIA Corp · NASDAQ</span></p>
-                <p class="bp-price">${money(LAST)}</p>
+                <p class="bp-sym"><span class="bp-ticker">N</span><b>NVDA</b><span>NVIDIA Corp</span></p>
+                <p class="bp-price">${money(LAST)}<small>USD</small></p>
+                <p class="bp-change">+${money(dayChange)} (+{((dayChange / (LAST - dayChange)) * 100).toFixed(2)}%) today</p>
               </div>
-              <div class="bp-tools">
-                <div class="bp-seg"><span>1D</span><span>1W</span><span>1M</span><span class="is-on">3M</span><span>1Y</span></div>
-                <div class="bp-chips">
-                  <span class="bp-chip"><i class="bp-swatch"></i>MA 8</span>
-                  <span class="bp-chip">Volume</span>
-                  <span class="bp-chip">Draw order</span>
-                </div>
+              <div class="bp-chips">
+                <span class="bp-chip"><i class="bp-swatch"></i>MA 8</span>
+                <span class="bp-chip">Volume</span>
+                <span class="bp-chip">Draw order</span>
               </div>
             </div>
 
@@ -414,6 +450,14 @@ const a = (name: string) => `--a:${name}`;
               ))}
               <path class="bp-ma" d={maPath} />
             </svg>
+
+            <div class="bp-seg"><span>1D</span><span>1W</span><span>1M</span><span class="is-on">3M</span><span>YTD</span><span>All</span></div>
+            <div class="bp-details">
+              <p class="bp-details-title">Market details</p>
+              {marketDetails.map(([k, v]) => (
+                <p><span class="bp-muted">{k}</span><b>{v}</b></p>
+              ))}
+            </div>
 
             <!-- Order lines and crosshair, drawn in em over the chart (1em = 10 chart units) -->
             <div class="bp-overlay">
@@ -467,10 +511,15 @@ const a = (name: string) => `--a:${name}`;
               <span class="bp-muted">Risk / reward</span>
               <b class="bp-swap"><span class="bp-a bp-hide" style={a(T.dashSl)}>—</span><span class="bp-a" style={a(T.slSet)}>1 : {(profit / loss).toFixed(1)}</span></b>
             </div>
+            <div class="bp-total bp-est">
+              <span class="bp-muted">Estimated cost</span>
+              <b class="bp-swap"><span class="bp-a bp-hide" style={a(T.dashEntry)}>—</span><span class="bp-a" style={a(T.entry)}>${money(ENTRY * QTY)}</span></b>
+            </div>
             <span class="bp-btn bp-dark bp-place bp-a" style={a(T.place)}>Place order</span>
+            <p class="bp-muted bp-order-note">Commission-free · Market open</p>
           </div>
 
-          <div class="bp-toast bp-toast-left bp-a bp-hide" style={a(T.toast)}>
+          <div class="bp-toast bp-a bp-hide" style={a(T.toast)}>
             <span class="bp-toast-icon"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
             <span class="bp-toast-text"><b>Order placed</b><span>Buy {QTY} NVDA at {money(ENTRY)} with TP and SL</span></span>
           </div>
@@ -483,7 +532,7 @@ const a = (name: string) => `--a:${name}`;
           </div>
         </div>
 
-        <div class="bp-phone">
+        <div class="bp-phone bp-a" style={a(T.phone)}>
           <div class="bp-screen">
             <div class="bp-lock">
               <p class="bp-lock-date">Wednesday, October 1</p>
@@ -507,7 +556,7 @@ const a = (name: string) => `--a:${name}`;
                 <svg class="bp-icon" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
                 <p class="bp-app-title">Trade closed</p>
               </div>
-              <p class="bp-muted">NVDA · {QTY} shares · Take profit</p>
+              <p class="bp-sym bp-m-sym"><span class="bp-ticker">N</span><b>NVDA</b><span>{QTY} shares · Take profit</span></p>
               <p class="bp-gain">+${money(profit)}</p>
               <p class="bp-gain-pct">▲ {(((TP - ENTRY) / ENTRY) * 100).toFixed(2)}% in 2 days</p>
               <svg class="bp-mini" viewBox="0 0 240 100">
@@ -554,12 +603,14 @@ const a = (name: string) => `--a:${name}`;
             <div class="bp-banner bp-a bp-hide" style={a(T.banner)}>
               <span class="bp-app-icon"></span>
               <span class="bp-banner-text">
-                <span class="bp-row"><b>Take profit hit</b><span class="bp-muted">now</span></span>
+                <span class="bp-row bp-banner-app"><span>QuestBank</span><span>now</span></span>
+                <b>Take profit hit</b>
                 <span>Sold {QTY} NVDA at ${money(TP)}. You made +${money(profit)}.</span>
               </span>
             </div>
 
             <div class="bp-status"><span class="bp-island"></span></div>
+            <span class="bp-home"></span>
             <span class="bp-tap bp-a bp-hide" style={a(T.taps)}></span>
           </div>
         </div>
@@ -606,7 +657,7 @@ const a = (name: string) => `--a:${name}`;
     --text: #2d2b25;
     --muted: #8b887d;
     --line: #ecebe5;
-    --app: #f5f5f3;
+    --app: #ffffff;
     --card: #ffffff;
     --lime: #86dc2a;
     --lime-soft: #e6f5d2;
@@ -822,10 +873,10 @@ const a = (name: string) => `--a:${name}`;
   /* ---------------- Desktop ---------------- */
   .bp-desktop {
     position: absolute;
-    left: 12.5em;
-    top: 10.2em; /* vertically centred in the 86.4em-tall frame */
+    left: 12.5em; /* centred (28em) until the phone arrives; see enter() */
+    top: 4.2em; /* vertically centred in the 86.4em-tall frame */
     width: 104em;
-    height: 66em; /* same height as every desktop window in the case studies */
+    height: 78em;
     overflow: hidden;
     border-radius: 2.2em;
     background: var(--app);
@@ -833,51 +884,88 @@ const a = (name: string) => `--a:${name}`;
   }
   .bp-nav {
     position: absolute;
-    left: 3.6em;
-    right: 3.6em;
-    top: 2.8em;
+    left: 0;
+    right: 0;
+    top: 0;
     display: flex;
     align-items: center;
-    gap: 3em;
-    height: 3.6em;
+    gap: 3.2em;
+    height: 7em;
+    padding: 0 3.6em;
+    border-bottom: 1px solid var(--line);
+  }
+  .bp-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.45em;
+    font-family: var(--font-serif);
+    font-size: 2em;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ink);
   }
   .bp-logo {
-    width: 2.8em;
-    height: 2.8em;
-    margin-right: 0.6em;
+    width: 0.8em;
+    height: 0.8em;
     border-radius: 50%;
-    background: var(--lime);
+    background: radial-gradient(circle at 50% 50%, var(--strong) 0 28%, var(--lime) 30%);
+  }
+  .bp-links {
+    display: flex;
+    gap: 0.4em;
   }
   .bp-link {
-    position: relative;
-    font-size: 1.3em;
+    padding: 0.45em 0.95em;
+    border-radius: 2em;
+    font-size: 1.25em;
     font-weight: 500;
     color: var(--muted);
   }
   .bp-link.is-active {
+    background: var(--subtle);
+    font-weight: 600;
     color: var(--ink);
-  }
-  .bp-link.is-active::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -0.6em;
-    height: 0.16em;
-    border-radius: 1em;
-    background: var(--lime);
   }
   .bp-nav-end {
     display: flex;
     align-items: center;
-    gap: 1.8em;
+    gap: 1em;
     margin-left: auto;
+  }
+  .bp-search {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    width: 17em;
+    height: 3.4em;
+    padding: 0 1.1em;
+    border-radius: 2em;
+    background: var(--subtle);
+    font-size: 1.15em;
+    color: var(--muted);
+  }
+  .bp-search .bp-icon {
+    width: 1.4em;
+    height: 1.4em;
+    stroke: var(--muted);
+  }
+  .bp-icon-btn {
+    display: grid;
+    place-items: center;
+    width: 3.6em;
+    height: 3.6em;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+  }
+  .bp-icon-btn .bp-icon {
+    width: 1.7em;
+    height: 1.7em;
   }
   .bp-avatar {
     display: grid;
     place-items: center;
-    width: 3.2em;
-    height: 3.2em;
+    width: 3.6em;
+    height: 3.6em;
     border-radius: 50%;
     background: #d9cbb0;
   }
@@ -889,20 +977,18 @@ const a = (name: string) => `--a:${name}`;
   .bp-hello {
     position: absolute;
     left: 1.125em; /* 3.6em at this font size */
-    top: 2.7em;
+    top: 3.125em; /* 10em */
     font-family: var(--font-serif);
     font-size: 3.2em;
     font-weight: 500;
     line-height: 1;
     color: var(--ink);
   }
+  /* Panels sit straight on the page, no card chrome (CT = 17em, see frontmatter) */
   .bp-card {
     position: absolute;
-    top: 14em;
-    height: 49.2em;
-    padding: 2.4em;
-    border-radius: 1.6em;
-    background: var(--card);
+    top: 17em;
+    height: 58em;
   }
   .bp-card-title {
     font-family: var(--font-serif);
@@ -924,14 +1010,10 @@ const a = (name: string) => `--a:${name}`;
     display: flex;
     align-items: center;
     gap: 1.1em;
-    padding: 1.2em 1.8em 1.2em 1.3em;
-    border-radius: 1.4em;
-    background: var(--surface);
-    box-shadow: 0 1.2em 3em rgb(40 40 20 / 0.16);
-  }
-  .bp-toast-left {
-    right: auto;
-    left: 6em; /* over the chart's volume bars, clear of the order button */
+    padding: 1.1em 2.2em 1.1em 1.1em;
+    border-radius: 3em;
+    background: var(--strong);
+    box-shadow: 0 1.2em 3em rgb(40 40 20 / 0.2);
   }
   .bp-toast-icon {
     display: grid;
@@ -956,10 +1038,11 @@ const a = (name: string) => `--a:${name}`;
   }
   .bp-toast-text b {
     font-size: 1.3em;
+    color: var(--on-strong);
   }
   .bp-toast-text span {
     font-size: 1.1em;
-    color: var(--muted);
+    color: color-mix(in srgb, var(--on-strong) 65%, transparent);
   }
 
   /* Mouse cursor: positioned by its tip */
@@ -992,15 +1075,17 @@ const a = (name: string) => `--a:${name}`;
     opacity: 0;
   }
 
-  /* Budget: main card */
+  /* Budget: main column (positions are from the column's top-left) */
   .bp-budget-card {
     left: 3.6em;
-    width: 62em;
+    width: 59em;
   }
   .bp-kid {
     display: flex;
     align-items: center;
     gap: 1.2em;
+    padding-bottom: 2em;
+    border-bottom: 1px solid var(--line);
   }
   .bp-face-lg {
     width: 4.6em;
@@ -1020,14 +1105,14 @@ const a = (name: string) => `--a:${name}`;
   }
   .bp-budget-label {
     position: absolute;
-    left: 2em;
-    top: 7.3em;
+    left: 0;
+    top: 8.75em; /* 10.5em */
     font-size: 1.2em;
   }
   .bp-budget-amount {
     position: absolute;
-    left: 0.55em;
-    top: 2.35em;
+    left: 0;
+    top: 2.8em; /* 12.3em */
     justify-items: start;
     font-family: var(--font-serif);
     font-size: 4.4em;
@@ -1036,9 +1121,9 @@ const a = (name: string) => `--a:${name}`;
   }
   .bp-slider {
     position: absolute;
-    left: 2.4em;
-    right: 2.4em;
-    top: 17em;
+    left: 0;
+    right: 0;
+    top: 20em;
     height: 0.6em;
     border-radius: 1em;
     background: var(--track);
@@ -1065,25 +1150,35 @@ const a = (name: string) => `--a:${name}`;
   }
   .bp-slider-scale {
     position: absolute;
-    left: 2.4em;
-    right: 2.4em;
-    top: 19.4em;
+    left: 0;
+    right: 0;
+    top: 22.4em;
     display: flex;
     justify-content: space-between;
     font-size: 1em;
     color: var(--muted);
   }
+  .bp-cats-head {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 24.2em; /* 26.6em */
+    font-size: 1.1em;
+  }
+  .bp-cats-head .bp-overline {
+    font-size: 0.9em;
+  }
   .bp-cats {
     position: absolute;
-    left: 2.4em;
-    right: 2.4em;
-    top: 23em;
+    left: 0;
+    right: 0;
+    top: 30em;
   }
   .bp-cat {
     display: grid;
     grid-template-columns: auto 10em 1fr 4em;
     align-items: center;
-    height: 3.6em;
+    height: 4.4em;
     border-bottom: 1px solid var(--line);
   }
   .bp-cat-name {
@@ -1113,9 +1208,9 @@ const a = (name: string) => `--a:${name}`;
   }
   .bp-budget-actions {
     position: absolute;
-    left: 2.4em;
-    right: 2.4em;
-    top: 43.2em;
+    left: 0;
+    right: 0;
+    top: 51em;
     display: flex;
     align-items: center;
     gap: 1.2em;
@@ -1157,8 +1252,10 @@ const a = (name: string) => `--a:${name}`;
 
   /* Budget: side card */
   .bp-side-card {
-    left: 67.8em;
-    width: 32.6em;
+    left: 65.6em;
+    width: 34.8em;
+    padding-left: 3em;
+    border-left: 1px solid var(--line);
   }
   .bp-goal {
     margin: 1.6em 0 0.4em;
@@ -1167,8 +1264,10 @@ const a = (name: string) => `--a:${name}`;
     margin-bottom: 0.7em;
     font-size: 1.25em;
   }
+  .bp-side-card .bp-overline {
+    margin-top: 2.2em !important;
+  }
   .bp-overline {
-    margin-top: 2em !important;
     padding-bottom: 0.4em;
     font-size: 1em;
     font-weight: 600;
@@ -1184,14 +1283,40 @@ const a = (name: string) => `--a:${name}`;
   .bp-rule > * {
     font-size: inherit;
   }
+  .bp-rule > b {
+    display: flex;
+    align-items: center;
+    gap: 0.3em;
+  }
+  .bp-chev {
+    width: 1.1em;
+    height: 1.1em;
+    fill: none;
+    stroke: var(--muted);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .bp-txn {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+  }
+  .bp-txn span {
+    font-size: 0.8em;
+    color: var(--muted);
+  }
+  .bp-rule:has(.bp-txn) {
+    height: 4.2em;
+  }
   .bp-switch-static {
     font-size: 0.83em;
   }
 
-  /* Trade: chart card */
+  /* Trade: chart column */
   .bp-chart-card {
     left: 3.6em;
-    width: 66em;
+    width: 61em;
   }
   .bp-chart-head {
     display: flex;
@@ -1199,43 +1324,87 @@ const a = (name: string) => `--a:${name}`;
     justify-content: space-between;
   }
   .bp-sym {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
     font-size: 1.3em;
   }
-  .bp-sym span {
-    margin-left: 0.5em;
+  .bp-sym > span:last-child {
     color: var(--muted);
   }
+  .bp-ticker {
+    display: grid;
+    place-items: center;
+    width: 1.7em;
+    height: 1.7em;
+    margin-right: 0.15em;
+    border-radius: 0.45em;
+    background: var(--lime);
+    font-size: 0.9em;
+    font-weight: 700;
+    color: var(--on-pastel);
+  }
   .bp-price {
-    margin-top: 0.1em !important;
+    margin-top: 0.35em !important;
     font-family: var(--font-serif);
     font-size: 3.4em;
     font-weight: 500;
     line-height: 1.1;
     color: var(--ink);
   }
-  .bp-tools {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 1em;
-  }
-  .bp-seg {
-    display: flex;
-    padding: 0.3em;
-    border-radius: 1em;
-    background: var(--subtle);
-  }
-  .bp-seg span {
-    padding: 0.35em 0.8em;
-    border-radius: 0.7em;
-    font-size: 1.1em;
+  .bp-price small {
+    margin-left: 0.35em;
+    font-family: var(--font-sans);
+    font-size: 0.3em;
     font-weight: 500;
     color: var(--muted);
   }
+  .bp-change {
+    margin-top: 0.2em !important;
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--pos);
+  }
+  .bp-seg {
+    position: absolute;
+    left: 0;
+    top: 49em;
+    display: flex;
+    gap: 0.3em;
+  }
+  .bp-seg span {
+    padding: 0.35em 0.85em;
+    border-radius: 2em;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--muted);
+  }
   .bp-seg .is-on {
-    background: var(--surface);
+    background: var(--subtle);
     color: var(--ink);
-    box-shadow: 0 0.1em 0.3em rgb(0 0 0 / 0.08);
+  }
+  .bp-details {
+    position: absolute;
+    left: 0;
+    right: 6em;
+    top: 52.6em;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.6em 2em;
+  }
+  .bp-details-title {
+    grid-column: 1 / -1;
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .bp-details p:not(.bp-details-title) {
+    display: flex;
+    flex-direction: column;
+    font-size: 1.1em;
+  }
+  .bp-details b {
+    font-weight: 500;
   }
   .bp-chips {
     display: flex;
@@ -1259,8 +1428,8 @@ const a = (name: string) => `--a:${name}`;
   }
   .bp-svg {
     position: absolute;
-    left: 2.4em;
-    top: 11em;
+    left: 0;
+    top: 12em;
     width: 61em;
   }
   .bp-gridline {
@@ -1313,10 +1482,10 @@ const a = (name: string) => `--a:${name}`;
   /* Order lines over the chart (overlay origin = plot origin; 55em wide plot, tags to the right) */
   .bp-overlay {
     position: absolute;
-    left: 2.4em;
-    top: 11em;
+    left: 0;
+    top: 12em;
     width: 55em;
-    height: 31em;
+    height: 34.6em;
   }
   .bp-level {
     position: absolute;
@@ -1407,7 +1576,7 @@ const a = (name: string) => `--a:${name}`;
     opacity: 0.55;
   }
   .bp-vline {
-    height: 31em;
+    height: 34.6em;
     border-left-width: 0.12em;
   }
   .bp-hline {
@@ -1417,11 +1586,15 @@ const a = (name: string) => `--a:${name}`;
 
   /* Trade: order ticket */
   .bp-order {
-    left: 71.8em;
-    width: 28.6em;
+    left: 67.6em; /* keep PLACE_X / PLACE_Y in the frontmatter in sync */
+    width: 32.8em;
+    padding-left: 3em;
+    border-left: 1px solid var(--line);
     display: flex;
     flex-direction: column;
-    gap: 1.1em;
+  }
+  .bp-order .bp-toggle {
+    margin: 1.4em 0 0.6em;
   }
   .bp-toggle {
     display: grid;
@@ -1450,13 +1623,14 @@ const a = (name: string) => `--a:${name}`;
     font-size: 1.15em;
   }
   .bp-field {
-    padding: 0.75em 0.9em;
-    border: 1px solid var(--line);
-    border-radius: 0.9em;
+    padding: 0.95em 0;
+    border-bottom: 1px solid var(--line);
   }
   .bp-total {
-    padding-top: 0.9em;
-    border-top: 1px solid var(--line);
+    padding-top: 1.1em;
+  }
+  .bp-est {
+    padding-top: 0.6em;
   }
   .bp-field i,
   .bp-total i {
@@ -1464,9 +1638,14 @@ const a = (name: string) => `--a:${name}`;
     font-size: 0.9em;
   }
   .bp-place {
-    margin-top: auto;
+    margin-top: 1.8em;
     padding: 0.8em;
     font-size: 1.3em;
+  }
+  .bp-order-note {
+    margin-top: 1.1em !important;
+    text-align: center;
+    font-size: 1em;
   }
 
   /* ---------------- Phone ---------------- */
@@ -1497,6 +1676,18 @@ const a = (name: string) => `--a:${name}`;
     z-index: 6;
     display: flex;
     justify-content: center;
+  }
+  .bp-home {
+    position: absolute;
+    left: 50%;
+    bottom: 0.8em;
+    z-index: 6;
+    width: 11em;
+    height: 0.42em;
+    margin-left: -5.5em;
+    border-radius: 1em;
+    background: var(--ink);
+    opacity: 0.85;
   }
   .bp-island {
     width: 8em;
@@ -1591,6 +1782,13 @@ const a = (name: string) => `--a:${name}`;
   .bp-banner-text b {
     font-size: 1.05em;
   }
+  .bp-banner-app {
+    font-size: 0.85em;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
 
   /* App screens (open over the lock screen) */
   .bp-app {
@@ -1663,10 +1861,9 @@ const a = (name: string) => `--a:${name}`;
   .bp-m-cats {
     display: flex;
     flex-direction: column;
-    gap: 0.9em;
-    padding: 1.3em 1.4em;
-    border-radius: 1.6em;
-    background: var(--surface);
+    gap: 1em;
+    padding: 1.2em 0 0.4em;
+    border-top: 1px solid var(--line);
   }
   .bp-m-cat .bp-row {
     margin-bottom: 0.4em;
@@ -1701,7 +1898,7 @@ const a = (name: string) => `--a:${name}`;
   }
 
   /* Trade result screen */
-  .bp-app > .bp-muted {
+  .bp-m-sym {
     font-size: 1.1em;
   }
   .bp-gain {
@@ -1749,9 +1946,7 @@ const a = (name: string) => `--a:${name}`;
   .bp-rows {
     display: flex;
     flex-direction: column;
-    padding: 0.4em 1.4em;
-    border-radius: 1.6em;
-    background: var(--surface);
+    border-top: 1px solid var(--line);
   }
   .bp-rows .bp-row {
     height: 3.1em;
