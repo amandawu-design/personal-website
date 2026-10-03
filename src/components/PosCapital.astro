@@ -20,10 +20,10 @@ const money = (v: number, d = 2) => '$' + v.toLocaleString('en-US', { minimumFra
 const round2 = (v: number) => Math.round(v * 100 + 1e-6) / 100; // cents, with float slack (58.195 → 58.20)
 
 /* ================================================================== */
-/* Scenario 1: pay at table (26s)                                      */
+/* Scenario 1: pay at table (21.5s)                                    */
 /* ================================================================== */
 
-const PAY_T = '26s';
+const PAY_T = '21.5s'; // ends ~4s after the payment is approved
 const TAX = 0.13;
 const items = [
   { name: 'Margherita pizza', qty: 2, price: 38 },
@@ -49,87 +49,87 @@ const remaining = round2(total - guest1);
 
 // Desktop cursor (desktop em): table 12, then "Pay at table"
 const payCursor: Point[] = [
-  [0, 56, 52],
-  [6, 37, 35.5],
-  [8.5, 37, 35.5],
-  [14, 91.3, 61.6],
-  [16.5, 91.3, 61.6],
-  [22, 98, 64],
-  [100, 98, 64],
+  [0, 56, 58.5],
+  [7.3, 37, 42],
+  [10.3, 37, 42],
+  [16.9, 91.3, 73.6],
+  [20, 91.3, 73.6],
+  [26.6, 98, 76],
+  [100, 98, 76],
 ];
 // Terminal taps (terminal-screen em)
 const segY = 12.3;
 const rowY = (i: number) => 16.55 + i * 2.7;
 const P = {
   cursor: path('pc-a-cursor', payCursor),
-  cursorVis: between(1, 23),
-  clicks: clicks('pc-a-clicks', [7.5, 16]),
-  empty: off(8.8),
-  selected: on(8.3),
-  bill: on(8.8),
-  pay: press(16),
+  cursorVis: between(1.2, 27.8),
+  clicks: clicks('pc-a-clicks', [9.1, 19.3]),
+  empty: off(10.6),
+  selected: on(10),
+  bill: on(10.6),
+  pay: press(19.3),
   // terminal
-  glow: on(18),
-  idle: off(18),
-  split: between(18, 46),
-  segEven: between(18, 26),
-  segPct: between(26, 34),
-  segItems: on(34),
-  even: between(18, 26),
-  pct: between(26, 34),
-  byItem: on(34),
-  checks: [on(37), on(39), on(41)],
-  g1: [off(37), between(37, 39), between(39, 41), on(41)],
-  cont: press(45.5),
-  tip: between(46, 56),
-  tip18: off(51),
-  tip20: on(51),
-  tot18: off(51),
-  tot20: on(51),
-  payBtn: press(55.5),
-  tap: between(56, 66),
+  glow: on(21.8),
+  idle: off(21.8),
+  split: between(21.8, 55.6),
+  segEven: between(21.8, 31.4),
+  segPct: between(31.4, 41.1),
+  segItems: on(41.1),
+  even: between(21.8, 31.4),
+  pct: between(31.4, 41.1),
+  byItem: on(41.1),
+  checks: [on(44.7), on(47.2), on(49.6)],
+  g1: [off(44.7), between(44.7, 47.2), between(47.2, 49.6), on(49.6)],
+  cont: press(55),
+  tip: between(55.6, 67.7),
+  tip18: off(61.7),
+  tip20: on(61.7),
+  tot18: off(61.7),
+  tot20: on(61.7),
+  payBtn: press(67.1),
+  tap: between(67.7, 79.8),
   // the card slides in, taps the screen, slides away (terminal-body em)
   // a real card is about as wide as the reader: 28 × 17.7em on a 30em-wide body
   card: path('pc-a-card', [
     [0, 48, 30],
-    [59, 48, 30],
-    [62.5, 3, 17.5],
-    [64, 1, 15.75], // centred on the contactless icon
-    [66, 3, 17.5],
-    [69, 48, 30],
+    [71.3, 48, 30],
+    [75.6, 3, 17.5],
+    [77.4, 1, 15.75], // centred on the contactless icon
+    [79.8, 3, 17.5],
+    [83.4, 48, 30],
     [100, 48, 30],
   ]),
-  approved: on(66),
-  receiptOpts: off(70.5),
-  receiptSent: on(70.5),
+  approved: on(79.8),
+  receiptOpts: off(85.3),
+  receiptSent: on(85.3),
   taps: taps('pc-a-taps', [
-    [26, 13.4, segY],
-    [34, 21.27, segY],
-    [37, 2.8, rowY(picks[0])],
-    [39, 2.8, rowY(picks[1])],
-    [41, 2.8, rowY(picks[2])],
-    [45.5, 13.4, 47],
-    [51, 7.3, 20.4],
-    [55.5, 13.4, 47],
-    [70, 7.3, 40.2], // "Text" receipt
+    [31.4, 13.4, segY],
+    [41.1, 21.27, segY],
+    [44.7, 2.8, rowY(picks[0])],
+    [47.2, 2.8, rowY(picks[1])],
+    [49.6, 2.8, rowY(picks[2])],
+    [55, 13.4, 47],
+    [61.7, 7.3, 20.4],
+    [67.1, 13.4, 47],
+    [84.7, 7.3, 40.2], // "Text" receipt
   ]),
   // desktop after payment
-  tableBefore: off(70),
-  tableAfter: on(70),
-  paidRow: on(70),
-  toast: toast(70, 92),
+  tableBefore: off(84.7),
+  tableAfter: on(84.7),
+  paidRow: on(84.7),
+  toast: toast(84.7, 95.5),
 };
 
 const tables = [
-  { id: 10, x: 12, y: 10.5, state: 'busy', amount: 64.2, meta: '2 guests · 38m' },
-  { id: 11, x: 30, y: 10.5, state: 'free' },
-  { id: 14, x: 48, y: 10.5, state: 'ordering', meta: '3 guests · 5m' },
-  { id: 15, x: 12, y: 28.5, state: 'free' },
-  { id: 12, x: 30, y: 28.5, state: 'busy', amount: total, meta: '4 guests · 1h 12m', target: true },
-  { id: 16, x: 48, y: 28.5, state: 'busy', amount: 37.8, meta: '2 guests · 22m' },
-  { id: 20, x: 12, y: 46.5, state: 'busy', amount: 210.45, meta: '6 guests · 54m' },
-  { id: 21, x: 30, y: 46.5, state: 'free' },
-  { id: 22, x: 48, y: 46.5, state: 'reserved', meta: '8:00 PM' },
+  { id: 10, x: 12, y: 15, state: 'busy', amount: 64.2, meta: '2 guests · 38m' },
+  { id: 11, x: 30, y: 15, state: 'free' },
+  { id: 14, x: 48, y: 15, state: 'ordering', meta: '3 guests · 5m' },
+  { id: 15, x: 12, y: 35, state: 'free' },
+  { id: 12, x: 30, y: 35, state: 'busy', amount: total, meta: '4 guests · 1h 12m', target: true },
+  { id: 16, x: 48, y: 35, state: 'busy', amount: 37.8, meta: '2 guests · 22m' },
+  { id: 20, x: 12, y: 55, state: 'busy', amount: 210.45, meta: '6 guests · 54m' },
+  { id: 21, x: 30, y: 55, state: 'free' },
+  { id: 22, x: 48, y: 55, state: 'reserved', meta: '8:00 PM' },
 ];
 
 /* ================================================================== */
@@ -1040,15 +1040,15 @@ const generatedCss = css();
   }
   .pc-desktop-pay {
     left: 10em;
-    top: 10.2em;
+    top: 4.2em; /* vertically centred in the 86.4em-tall frame */
     width: 104em;
-    height: 66em;
+    height: 78em; /* same height as BankPortal's desktop */
   }
   .pc-desktop-cap {
     left: 10em;
     top: 4.2em;
     width: 140em;
-    height: 78em; /* taller than the other windows so the dashboard fills the frame */
+    height: 78em;
   }
   .pc-side {
     position: absolute;
