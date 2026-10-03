@@ -1,11 +1,11 @@
 ---
 // Animated concept for the digital bank case study, in two scenarios that
 // auto-cycle (with tabs to switch and a pause button):
-//   1. Family budget: a parent sets a monthly budget on desktop, then the
-//      child gets a notification on their phone and opens the details.
-//   2. Trading: an order with take profit / stop loss is placed right on the
+//   1. Trading: an order with take profit / stop loss is placed right on the
 //      chart on desktop, then on mobile the take profit fills and the gain is
 //      shared with a friend.
+//   2. Family budget: a parent sets a monthly budget on desktop, then the
+//      child gets a notification on their phone and opens the details.
 //
 // Everything inside the frame is sized in em, and 1em = 1/160 of the frame
 // width, so the scene scales like an image. Each scenario runs once per play
@@ -30,7 +30,7 @@ const enter = (a: number, b: number) => ({
 });
 
 /* ------------------------------------------------------------------ */
-/* Scenario 1: family budget (16s)                                     */
+/* Scenario 2: family budget (16s)                                     */
 /* ------------------------------------------------------------------ */
 
 const BUDGET_T = '16s';
@@ -84,7 +84,7 @@ const budgetCats = [
 ];
 
 /* ------------------------------------------------------------------ */
-/* Scenario 2: trading (22s)                                           */
+/* Scenario 1: trading (22s)                                           */
 /* ------------------------------------------------------------------ */
 
 const TRADE_T = '22s';
@@ -225,29 +225,29 @@ const generatedCss = css();
 
 const scenes = [
   {
-    key: 'budget',
-    tab: 'Family budget',
-    T: BUDGET_T,
-    label:
-      'Animated concept: on desktop, a parent sets an $80 monthly budget for their child. On the child’s phone, a notification arrives and opens the budget details.',
-  },
-  {
     key: 'trade',
     tab: 'Trading',
     T: TRADE_T,
     label:
       'Animated concept: on desktop, an investor places a limit order with take profit and stop loss directly on a candlestick chart. On mobile, the take profit fills and they share the $600 gain with a friend.',
   },
+  {
+    key: 'budget',
+    tab: 'Family budget',
+    T: BUDGET_T,
+    label:
+      'Animated concept: on desktop, a parent sets an $80 monthly budget for their child. On the child’s phone, a notification arrives and opens the budget details.',
+  },
 ];
 
 const a = (name: string) => `--a:${name}`;
 ---
 
-<div class="bp-root" data-bank-portal data-scene="budget">
+<div class="bp-root" data-bank-portal data-scene={scenes[0].key}>
   <div class="bp" role="img" aria-label={scenes[0].label} data-bp-frame>
     <div class="bp-stage" aria-hidden="true">
       <!-- ============================================================ -->
-      <!-- Scenario 1: family budget                                    -->
+      <!-- Scenario 2: family budget                                    -->
       <!-- ============================================================ -->
       <div class="bp-scene bp-scene-budget" style={`--T:${BUDGET_T}`}>
         <div class="bp-desktop bp-a" style={a(B.desk)}>
@@ -390,7 +390,7 @@ const a = (name: string) => `--a:${name}`;
       </div>
 
       <!-- ============================================================ -->
-      <!-- Scenario 2: trading                                           -->
+      <!-- Scenario 1: trading                                           -->
       <!-- ============================================================ -->
       <div class="bp-scene bp-scene-trade" style={`--T:${TRADE_T}`}>
         <div class="bp-desktop bp-a" style={a(T.desk)}>
